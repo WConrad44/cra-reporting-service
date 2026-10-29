@@ -3,7 +3,7 @@ from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from .. import clock
-from ..auth import require_actor, require_token
+from ..auth import require_token
 from ..database import get_db
 from ..models import Ticket
 from ..schemas import SessionResponse, SystemTestReportResponse, SystemTestSetupRequest
@@ -16,7 +16,7 @@ router = APIRouter(prefix="/test", tags=["cross-team-testing"])
     "/setup",
     response_model=SessionResponse,
     status_code=201,
-    dependencies=[Depends(require_token), Depends(require_actor)],
+    dependencies=[Depends(require_token)],
 )
 def setup_system_test(body: SystemTestSetupRequest, db: Session = Depends(get_db)):
     """Prepare a clean target state for one externally supplied test session."""

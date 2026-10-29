@@ -160,7 +160,7 @@ def test_openapi_exposes_phase3_contract_paths(client):
 def test_course_system_setup_and_report(client):
     setup = client.post(
         "/test/setup",
-        headers=HEADERS,
+        headers=AUTH_ONLY,
         json={"session_id": "run-course-interface", "setup": {}},
     )
     assert setup.status_code == 201, setup.text
@@ -168,7 +168,7 @@ def test_course_system_setup_and_report(client):
 
     duplicate = client.post(
         "/test/setup",
-        headers=HEADERS,
+        headers=AUTH_ONLY,
         json={"session_id": "run-course-interface", "setup": {}},
     )
     assert duplicate.status_code == 409

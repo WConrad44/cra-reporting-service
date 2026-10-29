@@ -295,7 +295,6 @@ def setup(body: TesterSetupRequest):
             target,
             "/test/setup",
             json={"session_id": session_id, "setup": {}},
-            actor=True,
         )
     except httpx.RequestError as exc:
         return JSONResponse(status_code=500, content={"message": str(exc), "source": "communication"})
