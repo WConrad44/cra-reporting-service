@@ -1,8 +1,9 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from .config import MAX_BODY_BYTES
+from .config import API_TOKEN, MAX_BODY_BYTES
 from .database import Base, engine
 from .routes import cross_team, health, test_controls, tickets
 
@@ -22,6 +23,19 @@ async def body_size_limit(request: Request, call_next):
     if length is not None:
         try:
             if int(length) > MAX_BODY_BYTES:
+                if request.url.path != "/health":
+                    authorization = request.headers.get("authorization", "")
+                    scheme, _, token = authorization.partition(" ")
+                    if scheme.lower() != "bearer" or token != API_TOKEN:
+                        return JSONResponse(
+                            status_code=401,
+                            content={
+                                "title": "Unauthorized",
+                                "status": 401,
+                                "detail": "Missing or invalid bearer token",
+                            },
+                            media_type="application/problem+json",
+                        )
                 return JSONResponse(
                     status_code=413,
                     content={
@@ -69,6 +83,7 @@ async def validation_exception_handler(
 
 
 @app.exception_handler(HTTPException)
+@app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(
     request: Request,
     exc: HTTPException,
@@ -91,7 +106,11 @@ async def http_exception_handler(
         "status": exc.status_code,
     }
 
-    if isinstance(exc.detail, dict):
+    if isinstance(exc.detail, list):
+        content["detail"] = "multiple validation errors"
+        if exc.status_code in {400, 422}:
+            content["errors"] = exc.detail
+    elif isinstance(exc.detail, dict):
         field = exc.detail.get("field", "request")
         message = exc.detail.get("message", "invalid")
 
