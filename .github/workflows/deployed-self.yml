@@ -17,9 +17,9 @@ jobs:
         run: |
           python - <<'PY'
           import json, time, urllib.request
-          for label, url in [
-              ("system", "https://cra-phase3.onrender.com/openapi.json"),
-              ("tester", "https://cra-phase3-tester.onrender.com/openapi.json"),
+          for label, url, expected in [
+              ("system", "https://cra-phase3.onrender.com/openapi.json", "0.4.0"),
+              ("tester", "https://cra-phase3-tester.onrender.com/openapi.json", "0.4.1"),
           ]:
               for attempt in range(30):
                   try:
@@ -27,7 +27,7 @@ jobs:
                           data = json.load(response)
                       version = data.get("info", {}).get("version")
                       print(f"{label}: {version}")
-                      if version == "0.4.0":
+                      if version == expected:
                           break
                   except Exception as exc:
                       print(f"{label} attempt {attempt + 1}: {exc}")
