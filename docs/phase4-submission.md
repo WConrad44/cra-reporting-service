@@ -206,12 +206,11 @@ CI run: `https://github.com/WConrad44/cra-reporting-service/actions/runs/4126234
 
 ### Q4.5 Test results against the deployed system
 
-Run date/time: October 31, 2026 | Version tested: **[FINAL_MAIN_SHA / deployed tester 0.4.1]**
+Run date/time: October 31, 2026 | Version tested: **Team 21 system 0.4.0 / tester 0.4.2; main revision de341c0803ebe1030cb53c857e8085382daf7046**
 
-Tests run: **[SELF_TOTAL]** | Passed: **[SELF_PASS]** | Failed: **[SELF_FAIL]** |
-Skipped: **[SELF_SKIP]**
+Tests run: **17** | Passed: **17** | Failed: **0** | Skipped: **0**
 
-Failure: **[none, or copy any deployed-self failure from the report]**
+Failure: **none**
 
 ## Q5 Updated System Models
 
