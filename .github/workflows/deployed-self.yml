@@ -1,0 +1,78 @@
+name: Deployed self-validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/deployed-self.yml"
+
+jobs:
+  deployed-self:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Wait for Team 21 Phase 4 deployments
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, time, urllib.request
+          for label, url in [
+              ("system", "https://cra-phase3.onrender.com/openapi.json"),
+              ("tester", "https://cra-phase3-tester.onrender.com/openapi.json"),
+          ]:
+              for attempt in range(30):
+                  try:
+                      with urllib.request.urlopen(url, timeout=30) as response:
+                          data = json.load(response)
+                      version = data.get("info", {}).get("version")
+                      print(f"{label}: {version}")
+                      if version == "0.4.0":
+                          break
+                  except Exception as exc:
+                      print(f"{label} attempt {attempt + 1}: {exc}")
+                  time.sleep(10)
+              else:
+                  raise SystemExit(f"{label} did not reach Phase 4")
+          PY
+
+      - name: Team 21 tester against Team 21 deployed system
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, urllib.request
+
+          tester = "https://cra-phase3-tester.onrender.com"
+          target = "https://cra-phase3.onrender.com"
+
+          def post(path, body):
+              req = urllib.request.Request(
+                  tester + path,
+                  data=json.dumps(body).encode(),
+                  method="POST",
+                  headers={"Content-Type": "application/json"},
+              )
+              with urllib.request.urlopen(req, timeout=1200) as response:
+                  return json.load(response)
+
+          setup = post("/test/setup", {"target_url": target})
+          report = post("/test/run", {"session_id": setup["session_id"]})
+          open("team21-self.json", "w").write(json.dumps(report, indent=2))
+
+          counts = {}
+          for result in report.get("results", []):
+              outcome = result.get("outcome", "unknown")
+              counts[outcome] = counts.get(outcome, 0) + 1
+          print("Team 21 self-validation:", counts)
+          for result in report.get("results", []):
+              if result.get("outcome") != "pass":
+                  print(result)
+          PY
+
+      - name: Upload deployed self report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployed-self-report
+          path: team21-self.json
+          if-no-files-found: warn
