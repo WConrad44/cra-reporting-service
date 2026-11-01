@@ -207,8 +207,7 @@ def create_ticket(db: Session, data: TicketCreate) -> Ticket:
     if any(value is not None for value in ext_values.values()):
         db.add(TicketExtension(ticket_id=ticket.id, **ext_values))
 
-    db.commit()
-    db.refresh(ticket)
+    db.flush()
     return ticket
 
 
