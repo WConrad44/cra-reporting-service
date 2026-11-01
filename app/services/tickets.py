@@ -327,7 +327,7 @@ DRAFT_FIELDS = {
             "vulnerability.description",
             "mitigations.for_users",
         ],
-        "include": ["product", "vulnerability", "mitigations", "impact", "fix"],
+        "include": ["product", "vulnerability", "mitigations", "severity", "impact", "fix"],
     },
 }
 
