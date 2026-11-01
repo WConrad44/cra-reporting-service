@@ -45,8 +45,11 @@ The system is deployed on Render in the Virginia region as a Python/FastAPI HTTP
 `https://cra-phase3.onrender.com`; the automated tester is separately deployed at
 `https://cra-phase3-tester.onrender.com`. Both services deploy from the `main` branch of
 `WConrad44/cra-reporting-service`; the Phase 4 application is version 0.4.0 and the optimized
-tester is version 0.4.1. The current final source revision is **3e4605a1c58dd59531c3eeeedaa252f5f6f89f08** (Phase 4 code/tester revision), and GitHub
-Actions validates every main update before it is treated as release evidence. These are free
+tester is version 0.4.2. The Phase 4 system implementation landed at
+`6230ee3479a15b8aae296bed6c42ee260334ff4e`, and the final tester parser/runtime changes
+landed at `de341c0803ebe1030cb53c857e8085382daf7046`; later evidence-only commits do not
+change the service behavior. GitHub Actions validates every main update before it is treated
+as release evidence. These are free
 Render services and are not guaranteed to remain warm while idle, so test runs first use the
 health/OpenAPI endpoints to wake and verify the deployment.
 
@@ -210,7 +213,7 @@ Run date/time: October 31, 2026 | Version tested: **Team 21 system 0.4.0 / teste
 
 Tests run: **17** | Passed: **17** | Failed: **0** | Skipped: **0**
 
-Failure: **none**
+Failure: **none**. Evidence: GitHub Actions deployed self-validation run `41263026888`.
 
 ## Q5 Updated System Models
 
@@ -244,12 +247,22 @@ describe the delivered code rather than the originally proposed architecture.
 ### Q6.1 Cross-team test
 
 Our tests -> Team 17 service | Date: October 31, 2026 |
-Run/passed: **17/11 (6 failed: AC-02, AC-06, AC-08, AC-09, AC-10, AC-11)** |
-Main problem and owner: **Team 17/shared-contract alignment. The Team 21 tester reached their system successfully; the six failures are observable contract/workflow mismatches rather than communication errors and need joint review, with Team 17 checking its deployed responses against the shared Phase 4 behavior.**
+Run/passed: **17/11 in the last complete report**. That report listed failures in AC-02,
+AC-06, AC-08, AC-09, AC-10 and AC-11. AC-02 was subsequently identified as a Team 21
+tester defect (it ignored `application/problem+json`) and was fixed; the five remaining
+observable mismatches are AC-06, AC-08, AC-09, AC-10 and AC-11. A corrected final rerun
+reached the Render tester but hit a 502 long-request gateway before a new report was returned,
+so the completed 11/17 report remains the recorded directional count. Main problem/owner:
+**Team 17/shared-contract alignment for the five remaining behavior mismatches; Team 21 owns
+the already-fixed tester runtime/parser issues.** Evidence: cross-team runs `41262667904`
+and `41263167229`.
 
 Team 17 tests -> our service | Date: October 31, 2026 |
 Run/passed: **0/0; setup returned HTTP 401 before the suite executed** |
-Main problem and owner: **cross-team tester authentication/configuration. The published shared repo does not expose enough of Team 17's hosted tester wrapper to determine whether the 401 is its own access control or failure to forward Team 21's target token, so Team 17 needs to verify its deployed tester configuration/access instructions.**
+Main problem and owner: **cross-team tester authentication/configuration. The published
+shared repo does not expose enough of Team 17's hosted tester wrapper to determine whether
+the 401 is its own access control or failure to forward Team 21's target token, so Team 17
+needs to verify its deployed tester configuration/access instructions.**
 
 Coverage: Team 21's Phase 4 tester covers AC-01 through AC-17 except the Phase 5
 performance/restart work; AC-18/AC-19 remain Phase 5. Code-coverage counts are reported as
