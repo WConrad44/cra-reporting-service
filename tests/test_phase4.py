@@ -333,6 +333,32 @@ def test_ac12_audit_is_append_only_and_failures_add_nothing(client):
     assert delete_attempt.status_code == 405
 
 
+def test_ac12_reporter_only_update_is_audited_without_leaking_contact(client):
+    set_clock(client, "2026-10-20T12:00:00Z")
+    secret_old = "old-private-contact"
+    secret_new = "new-private-contact"
+    ticket = create(
+        client,
+        base_ticket(reporter={"name": "Reporter", "contact": secret_old}),
+    )
+
+    changed = client.patch(
+        f"/tickets/{ticket['id']}",
+        headers=HEADERS,
+        json={"reporter": {"name": "Reporter", "contact": secret_new}},
+    )
+    assert changed.status_code == 200, changed.text
+
+    entries = audit(client, ticket["id"])
+    assert len(entries) == 2
+    assert entries[-1]["action"] == "updated"
+    assert entries[-1]["changes"] == [
+        {"field": "reporter", "old": "[redacted]", "new": "[redacted]"}
+    ]
+    assert secret_old not in str(entries)
+    assert secret_new not in str(entries)
+
+
 def test_ac13_many_malformed_requests_never_5xx_or_change_data(client):
     for i in range(500):
         response = client.post(
