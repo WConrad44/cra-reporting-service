@@ -42,7 +42,7 @@ persistence is still scheduled for Phase 5 under REQ-18.
 ### Q2.1 Deployed web service
 
 The system is deployed on Render in the Virginia region as a Python/FastAPI HTTPS service at
-`https://cra-phase3.onrender.com`; the automated tester is separately deployed at
+`https://team21-cra-reporting-service.onrender.com`; the automated tester is separately deployed at
 `https://cra-phase3-tester.onrender.com`. Both services deploy from the `main` branch of
 `WConrad44/cra-reporting-service`; the Phase 4 application is version 0.4.0 and the optimized
 tester is version 0.4.2. The Phase 4 system implementation landed at
