@@ -1,10 +1,11 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from .. import clock
-from ..auth import require_actor, require_token
+from ..auth import require_actor, require_token, validate_actor
 from ..database import get_db
 from ..models import AuditEntry, ReportRecord, Ticket, TicketExtension
 from ..schemas import (
@@ -395,17 +396,47 @@ def get_report(ticket_id: str, report_type: str, db: Session = Depends(get_db)):
     response_model=DraftResponse,
     dependencies=[Depends(require_token)],
 )
-def record_submission(
+async def record_submission(
     ticket_id: str,
     report_type: str,
-    body: SubmissionRequest | None = None,
-    actor: str = Depends(require_actor),
+    request: Request,
     db: Session = Depends(get_db),
 ):
     if report_type not in REPORT_TYPES:
         raise HTTPException(status_code=404, detail="Unknown or non-submittable report type")
 
     ticket = _ticket_or_404(db, ticket_id)
+    actor = validate_actor(request.headers.get("X-Actor"))
+
+    raw = await request.body()
+    if raw:
+        try:
+            payload = json.loads(raw)
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"field": "body", "message": "invalid JSON"},
+            ) from exc
+        if not isinstance(payload, dict):
+            raise HTTPException(
+                status_code=400,
+                detail={"field": "body", "message": "request body must be a JSON object"},
+            )
+        try:
+            body = SubmissionRequest.model_validate(payload)
+        except ValidationError as exc:
+            errors = []
+            for error in exc.errors():
+                errors.append(
+                    {
+                        "field": ".".join(str(part) for part in error["loc"]) or "body",
+                        "message": error.get("msg", "invalid"),
+                    }
+                )
+            raise HTTPException(status_code=400, detail=errors) from exc
+    else:
+        body = SubmissionRequest()
+
     if ticket.state != "reportable":
         raise HTTPException(status_code=409, detail="Ticket is not reportable")
 
@@ -440,28 +471,26 @@ def record_submission(
             )
 
     draft = get_draft(db, ticket, report_type)
-    if draft["missing_fields"]:
-        field = draft["missing_fields"][0]
-        raise HTTPException(
-            status_code=422,
-            detail={"field": field, "message": "required before submission"},
-        )
-
-    body = body or SubmissionRequest()
     submitted_at = (
         clock.normalize_utc(body.submitted_at)
         if body.submitted_at is not None
         else clock.now()
     )
     aware_at = clock.normalize_utc(ticket.aware_at)
+
+    rule_errors = [
+        {"field": field, "message": "required before submission"}
+        for field in draft["missing_fields"]
+    ]
     if submitted_at < aware_at or submitted_at > clock.now():
-        raise HTTPException(
-            status_code=422,
-            detail={
+        rule_errors.append(
+            {
                 "field": "submitted_at",
                 "message": "must be between awareness time and the current time",
-            },
+            }
         )
+    if rule_errors:
+        raise HTTPException(status_code=422, detail=rule_errors)
 
     record = ReportRecord(
         ticket_id=ticket.id,
@@ -497,10 +526,11 @@ def record_submission(
 )
 def close_ticket(
     ticket_id: str,
-    actor: str = Depends(require_actor),
+    request: Request,
     db: Session = Depends(get_db),
 ):
     ticket = _ticket_or_404(db, ticket_id)
+    actor = validate_actor(request.headers.get("X-Actor"))
     if ticket.state != "reportable":
         raise HTTPException(status_code=409, detail="Ticket is not reportable")
 
