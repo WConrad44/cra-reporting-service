@@ -10,8 +10,8 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="CRA Vulnerability Ticketing Service",
-    version="0.3.0",
-    description="Phase 3 implementation of the pod's common CRA vulnerability-reporting API.",
+    version="0.4.0",
+    description="Phase 4 implementation of the Pod K CRA Article 14 reporting service.",
 )
 
 
