@@ -406,5 +406,5 @@ def snapshot_fields(ticket: Ticket, db: Session) -> dict:
     return {
         key: value
         for key, value in data.items()
-        if key not in {"obligations", "next_due_at", "reporter"}
+        if key not in {"obligations", "next_due_at"}
     }

@@ -15,7 +15,7 @@ from .schemas import SessionRequest, SessionResponse, SuiteReport, TesterSetupRe
 
 app = FastAPI(
     title="Team 21 CRA Cross-Team Tester",
-    version="0.1.0",
+    version="0.4.0",
     description="Phase 4 tester for the Pod K CRA Article 14 reporting service.",
 )
 
