@@ -1,38 +1,124 @@
-# Team 21 CRA Vulnerability Ticketing Service — Phase 3
+# Team 21 CRA Article 14 Reporting Service
 
-This repository now contains **two FastAPI applications** required for Phase 3:
+Team 21's implementation of the Pod K common CRA reporting service for ECE 30861.
+
+The repository contains two FastAPI applications:
 
 1. **System service** — `app.main:app`
-2. **Tester service** — `tester.main:app`
+2. **Automated tester** — `tester.main:app`
 
-The shared Pod K specification is the Phase 2 `spec.md` maintained by Teams 17 and 21. The shared `openapi.yaml` is authoritative for exact project-interface details and should be checked before final cross-team grading.
+The authoritative Pod K requirements and interface are maintained with Team 17 in
+`team17-ece30861/pod-k-shared`.
 
-## System service
+## Evaluation deployment
 
-Implemented Phase 3 project behavior:
+- System: https://cra-phase3.onrender.com
+- Tester: https://cra-phase3-tester.onrender.com
+- Hosting: Render, Virginia region, Python/FastAPI
+- Health: `GET /health`
+
+The Render services are linked to this GitHub repository. A push/merge to `main` triggers
+a new deployment. The public service can scale down when idle, so warm it with `GET /health`
+before timed tests.
+
+## Delivered through Phase 4
+
+### Phase 3 foundation
 
 - REQ-01 ticket intake
 - REQ-02 actively-exploited triage
 - REQ-03 non-reportable/invalid triage
-- REQ-04 24h / 72h / final-report deadline calculation
-- REQ-12 common error handling (Phase 3 subset)
-- REQ-13 RFC 3339 input + UTC output
-- REQ-14 bearer-token authentication + actor header for mutations
-- REQ-16 reset + controllable test clock
+- REQ-04 CRA deadline calculation
+- REQ-12 common error behavior
+- REQ-13 RFC 3339 / UTC handling
+- REQ-14 bearer authentication and actor identification
+- REQ-16 deterministic reset and test clock
 
-Course-wide cross-team endpoints added:
+### Phase 4 reporting workflow
 
-- `POST /test/setup`
-- `GET /test/report?session_id=...`
+- REQ-05 live report status, including `submitted` and `submitted_late`
+- REQ-06 full ticket updates and immediate deadline recalculation
+- REQ-07 early-warning, notification, final-report and user-advisory drafts
+- REQ-08 ordered report-submission recording with locked content snapshots
+- REQ-09 closure after all three Article 14 reports are recorded
+- REQ-10 filtered and deterministic ticket listing
+- REQ-11 append-only per-ticket audit history
+- REQ-15 reporter confidentiality outside the single-ticket response
 
-The existing Pod K controls remain:
+Phase 4 also incorporates the Pod K clarifications agreed with Team 17: irrelevant
+`aware_at` values on non-reportable triage are accepted and ignored; list ties use
+`received_at` then ID; no-op edits create no audit entry; future fix/corrective-measure
+times are rejected; and an explicit `unknown` value is accepted where Member State
+information is not yet known.
+
+## Current architecture
+
+```text
+HTTPS request
+   -> FastAPI route
+   -> bearer / X-Actor checks
+   -> Pydantic validation
+   -> ticket + reporting rules
+   -> SQLAlchemy
+   -> SQLite evaluation database
+```
+
+See [docs/phase4-models.md](docs/phase4-models.md) for the delivered lifecycle, report-status,
+draft-data, persistence and request-flow models.
+
+## API workflow
+
+A normal reportable incident follows:
+
+```text
+POST /tickets
+  -> POST /tickets/{id}/triage
+  -> PATCH /tickets/{id} as investigation data arrives
+  -> GET /tickets/{id}/reports/early_warning
+  -> POST /tickets/{id}/reports/early_warning/submission
+  -> GET /tickets/{id}/reports/notification
+  -> POST /tickets/{id}/reports/notification/submission
+  -> GET /tickets/{id}/reports/final_report
+  -> POST /tickets/{id}/reports/final_report/submission
+  -> POST /tickets/{id}/close
+```
+
+Supporting reads include filtered `GET /tickets`, `GET /tickets/{id}`,
+`GET /tickets/{id}/audit`, and the `user_advisory` draft.
+
+## Authentication
+
+`GET /health` is public. Project API operations require:
+
+```text
+Authorization: Bearer <private token>
+```
+
+Ticket-changing project operations additionally require:
+
+```text
+X-Actor: <person or client name>
+```
+
+The separate course-wide `POST /test/setup` endpoint does not require `X-Actor`.
+Tokens are configured as Render environment variables and are never committed.
+
+## Test controls
+
+The evaluation deployment keeps:
 
 - `POST /test/reset`
 - `GET /test/clock`
 - `PUT /test/clock`
 - `DELETE /test/clock`
+- course `POST /test/setup`
+- course `GET /test/report?session_id=...`
 
-### Run locally
+Only one destructive test suite should run against a deployment at a time.
+
+## Running locally
+
+### macOS / Linux
 
 ```bash
 python3 -m venv .venv
@@ -40,124 +126,55 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt
 export API_TOKEN=dev-token
 export DATABASE_URL=sqlite:///./cra.db
-uvicorn app.main:app --reload
+python3 -m uvicorn app.main:app --reload
 ```
 
-System docs: `http://127.0.0.1:8000/docs`
+### Windows PowerShell
 
-## Tester service
-
-The Team 21 tester implements the course interface:
-
-- `POST /test/setup`
-- `POST /test/run`
-- `GET /test/report?session_id=...`
-
-Its Phase 3 suite checks AC-01 through AC-05, AC-14, AC-15, and AC-17 against the selected Pod K target.
-
-### Run tester locally
-
-The tester must know the target system's bearer token. Keep tokens in environment variables; never place them in the class registry URL.
-
-For one target:
-
-```bash
-export TARGET_API_TOKEN='target-private-token'
-export TARGET_ACTOR='team21-tester'
-uvicorn tester.main:app --reload --port 8001
+```powershell
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements-dev.txt
+$env:API_TOKEN="dev-token"
+$env:DATABASE_URL="sqlite:///./cra.db"
+py -m uvicorn app.main:app --reload
 ```
 
-For multiple known targets, use a JSON mapping by hostname or full base URL:
+Open `http://127.0.0.1:8000/docs` for the local Swagger interface.
 
-```bash
-export TARGET_TOKENS_JSON='{"team17.example.run.app":"TEAM17_TOKEN","cra-phase3.onrender.com":"TEAM21_TOKEN"}'
-uvicorn tester.main:app --reload --port 8001
-```
+## Automated validation
 
-Tester docs: `http://127.0.0.1:8001/docs`
-
-### Tester workflow
-
-1. `POST /test/setup` with the selected system base URL:
-
-```json
-{"target_url":"https://target-system.example"}
-```
-
-2. Copy the returned `session_id` and call:
-
-```json
-POST /test/run
-{"session_id":"run-..."}
-```
-
-3. The run response is the complete suite report. It can later be retrieved with:
-
-```text
-GET /test/report?session_id=run-...
-```
-
-## Run local automated tests
+Run the Team 21 regression suite:
 
 ```bash
 python3 -m pytest -q
 ruff check app tester tests
 ```
 
-## Render deployment
+GitHub Actions runs dependency validation, Python compilation, Ruff and pytest on pushes
+and pull requests to `main`.
 
-### Existing Team 21 system
+The shared Model D E1-E8 deadline suite was independently checked against the Phase 2
+rules and reproduced by the Team 21 evaluation deployment (8/8).
 
-Keep the current system service start command:
+## Automated tester
 
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port $PORT
-```
+The tester exposes:
 
-Environment variables:
+- `POST /test/setup`
+- `POST /test/run`
+- `GET /test/report?session_id=...`
 
-```text
-API_TOKEN=<private Team 21 token>
-DATABASE_URL=sqlite:///./cra.db   # Phase 3 only; PostgreSQL is preferred for later persistence work
-```
+It selects a target-specific bearer credential from `TARGET_TOKENS_JSON`; this is how
+Team 21's tester authenticates to Team 17 without putting credentials in source code or
+the class registry.
 
-### Create the second Team 21 tester service
+## Persistence and Phase 5 limitations
 
-Create another Render Web Service from the **same GitHub repository**.
+The current Render evaluation service still uses SQLite. This is sufficient for the Phase 4
+workflow, but durable restart persistence (REQ-18) is not yet claimed because Render's local
+filesystem is not the final persistence design. PostgreSQL migration/restart validation and
+REQ-17 performance validation are Phase 5 work.
 
-Build command:
-
-```bash
-pip install -r requirements.txt
-```
-
-Start command:
-
-```bash
-uvicorn tester.main:app --host 0.0.0.0 --port $PORT
-```
-
-Set either:
-
-```text
-TARGET_API_TOKEN=<private token for the system being tested>
-TARGET_ACTOR=team21-tester
-```
-
-or, preferably for Team 17 + Team 21 targets:
-
-```text
-TARGET_TOKENS_JSON={"TEAM17_HOST":"TEAM17_PRIVATE_TOKEN","cra-phase3.onrender.com":"TEAM21_PRIVATE_TOKEN"}
-TARGET_ACTOR=team21-tester
-```
-
-Do not put these tokens in GitHub or the class registry.
-
-## Registry fields
-
-Team 21 should register:
-
-- **System base URL:** `https://cra-phase3.onrender.com`
-- **Tester base URL:** the second Render service URL created for `tester.main:app`
-- **Intra-pod specification URL:** the shared Pod K `spec.md` GitHub URL
-- **Access/run notes:** state that protected system calls use Bearer auth and credentials are provided privately; include agreed setup/run limits.
+The service does not submit reports directly to ENISA or a CSIRT, automatically determine
+whether exploitation is active, scan products for vulnerabilities, or deploy fixes.

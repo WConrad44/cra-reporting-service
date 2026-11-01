@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from .. import clock
 from ..auth import require_token
 from ..database import get_db
-from ..models import Ticket
+from ..models import AuditEntry, ReportRecord, Ticket, TicketExtension
 from ..schemas import ClockSetRequest
 
 router = APIRouter(prefix="/test", tags=["test-controls"])
@@ -17,6 +17,9 @@ router = APIRouter(prefix="/test", tags=["test-controls"])
     dependencies=[Depends(require_token)]
 )
 def reset(db: Session = Depends(get_db)):
+    db.execute(delete(AuditEntry))
+    db.execute(delete(ReportRecord))
+    db.execute(delete(TicketExtension))
     db.execute(delete(Ticket))
     db.commit()
     clock.clear_fixed()
