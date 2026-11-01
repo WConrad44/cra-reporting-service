@@ -19,7 +19,7 @@ jobs:
           import json, time, urllib.request
 
           targets = [
-              ("system", "https://cra-phase3.onrender.com/openapi.json", "0.4.0"),
+              ("system", "https://team21-cra-reporting-service.onrender.com/openapi.json", "0.4.0"),
               ("tester", "https://cra-phase3-tester.onrender.com/openapi.json", "0.4.2"),
           ]
           for label, url, expected in targets:
@@ -80,7 +80,7 @@ jobs:
           import json, urllib.error, urllib.request
 
           tester = "https://team17-prod-7zneiwx4ba-uc.a.run.app/tester"
-          target = "https://cra-phase3.onrender.com"
+          target = "https://team21-cra-reporting-service.onrender.com"
 
           def post(path, body):
               data = json.dumps(body).encode()
