@@ -240,7 +240,16 @@ class SubmissionRequest(BaseModel):
     @field_validator("submitted_at", mode="before")
     @classmethod
     def validate_submitted_at_format(cls, value):
+        if value is None:
+            raise ValueError("submitted_at must not be null")
         return validate_timestamp_string(value)
+
+    @field_validator("reference", mode="before")
+    @classmethod
+    def reference_must_not_be_null(cls, value):
+        if value is None:
+            raise ValueError("reference must not be null")
+        return value
 
     @field_validator("submitted_at")
     @classmethod
