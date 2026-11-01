@@ -1,0 +1,116 @@
+name: Cross-team validation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cross-team:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Wait for Team 21 Phase 4 deployments
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, time, urllib.request
+
+          targets = [
+              ("system", "https://cra-phase3.onrender.com/openapi.json"),
+              ("tester", "https://cra-phase3-tester.onrender.com/openapi.json"),
+          ]
+          for label, url in targets:
+              for attempt in range(30):
+                  try:
+                      with urllib.request.urlopen(url, timeout=30) as response:
+                          data = json.load(response)
+                      version = data.get("info", {}).get("version")
+                      print(f"{label}: {version}")
+                      if version == "0.4.0":
+                          break
+                  except Exception as exc:
+                      print(f"{label} attempt {attempt + 1}: {exc}")
+                  time.sleep(10)
+              else:
+                  raise SystemExit(f"{label} did not reach Phase 4")
+          PY
+
+      - name: Team 21 tester against Team 17 system
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, urllib.request
+
+          tester = "https://cra-phase3-tester.onrender.com"
+          target = "https://team17-prod-7zneiwx4ba-uc.a.run.app"
+
+          def post(path, body):
+              data = json.dumps(body).encode()
+              req = urllib.request.Request(
+                  tester + path,
+                  data=data,
+                  method="POST",
+                  headers={"Content-Type": "application/json"},
+              )
+              with urllib.request.urlopen(req, timeout=1200) as response:
+                  return json.load(response)
+
+          setup = post("/test/setup", {"target_url": target})
+          report = post("/test/run", {"session_id": setup["session_id"]})
+          open("team21-to-team17.json", "w").write(json.dumps(report, indent=2))
+
+          counts = {}
+          for result in report.get("results", []):
+              counts[result.get("outcome", "unknown")] = counts.get(result.get("outcome", "unknown"), 0) + 1
+          print("Team 21 -> Team 17:", counts)
+          for result in report.get("results", []):
+              if result.get("outcome") != "pass":
+                  print(result)
+          PY
+
+      - name: Team 17 tester against Team 21 system
+        continue-on-error: true
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, urllib.error, urllib.request
+
+          tester = "https://team17-prod-7zneiwx4ba-uc.a.run.app/tester"
+          target = "https://cra-phase3.onrender.com"
+
+          def post(path, body):
+              data = json.dumps(body).encode()
+              req = urllib.request.Request(
+                  tester + path,
+                  data=data,
+                  method="POST",
+                  headers={"Content-Type": "application/json"},
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=1200) as response:
+                      return json.load(response)
+              except urllib.error.HTTPError as exc:
+                  body = exc.read().decode()
+                  raise RuntimeError(f"HTTP {exc.code}: {body}") from exc
+
+          setup = post("/test/setup", {"target_url": target})
+          report = post("/test/run", {"session_id": setup["session_id"]})
+          open("team17-to-team21.json", "w").write(json.dumps(report, indent=2))
+
+          counts = {}
+          for result in report.get("results", []):
+              counts[result.get("outcome", "unknown")] = counts.get(result.get("outcome", "unknown"), 0) + 1
+          print("Team 17 -> Team 21:", counts)
+          for result in report.get("results", []):
+              if result.get("outcome") != "pass":
+                  print(result)
+          PY
+
+      - name: Upload cross-team reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cross-team-reports
+          path: |
+            team21-to-team17.json
+            team17-to-team21.json
+          if-no-files-found: warn
