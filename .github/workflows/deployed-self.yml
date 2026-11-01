@@ -18,7 +18,7 @@ jobs:
           python - <<'PY'
           import json, time, urllib.request
           for label, url, expected in [
-              ("system", "https://cra-phase3.onrender.com/openapi.json", "0.4.0"),
+              ("system", "https://team21-cra-reporting-service.onrender.com/openapi.json", "0.4.0"),
               ("tester", "https://cra-phase3-tester.onrender.com/openapi.json", "0.4.2"),
           ]:
               for attempt in range(30):
@@ -43,7 +43,7 @@ jobs:
           import json, urllib.request
 
           tester = "https://cra-phase3-tester.onrender.com"
-          target = "https://cra-phase3.onrender.com"
+          target = "https://team21-cra-reporting-service.onrender.com"
 
           def post(path, body):
               req = urllib.request.Request(
