@@ -45,7 +45,7 @@ The system is deployed on Render in the Virginia region as a Python/FastAPI HTTP
 `https://cra-phase3.onrender.com`; the automated tester is separately deployed at
 `https://cra-phase3-tester.onrender.com`. Both services deploy from the `main` branch of
 `WConrad44/cra-reporting-service`; the Phase 4 application is version 0.4.0 and the optimized
-tester is version 0.4.1. The current final source revision is **[FINAL_MAIN_SHA]**, and GitHub
+tester is version 0.4.1. The current final source revision is **3e4605a1c58dd59531c3eeeedaa252f5f6f89f08** (Phase 4 code/tester revision), and GitHub
 Actions validates every main update before it is treated as release evidence. These are free
 Render services and are not guaranteed to remain warm while idle, so test runs first use the
 health/OpenAPI endpoints to wake and verify the deployment.
@@ -245,12 +245,12 @@ describe the delivered code rather than the originally proposed architecture.
 ### Q6.1 Cross-team test
 
 Our tests -> Team 17 service | Date: October 31, 2026 |
-Run/passed: **[T21_TO_T17_RESULT]** |
-Main problem and owner: **[result from cross-team workflow]**
+Run/passed: **17/11 (6 failed: AC-02, AC-06, AC-08, AC-09, AC-10, AC-11)** |
+Main problem and owner: **Team 17/shared-contract alignment. The Team 21 tester reached their system successfully; the six failures are observable contract/workflow mismatches rather than communication errors and need joint review, with Team 17 checking its deployed responses against the shared Phase 4 behavior.**
 
 Team 17 tests -> our service | Date: October 31, 2026 |
-Run/passed: **[T17_TO_T21_RESULT]** |
-Main problem and owner: **[result from cross-team workflow]**
+Run/passed: **0/0; setup returned HTTP 401 before the suite executed** |
+Main problem and owner: **cross-team tester authentication/configuration. The published shared repo does not expose enough of Team 17's hosted tester wrapper to determine whether the 401 is its own access control or failure to forward Team 21's target token, so Team 17 needs to verify its deployed tester configuration/access instructions.**
 
 Coverage: Team 21's Phase 4 tester covers AC-01 through AC-17 except the Phase 5
 performance/restart work; AC-18/AC-19 remain Phase 5. Code-coverage counts are reported as
