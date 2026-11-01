@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from .. import clock
 from ..auth import require_token
 from ..database import get_db
-from ..models import Ticket
+from ..models import AuditEntry, ReportRecord, Ticket, TicketExtension
 from ..schemas import SessionResponse, SystemTestReportResponse, SystemTestSetupRequest
 from ..test_sessions import create_session, get_session
 
@@ -27,6 +27,9 @@ def setup_system_test(body: SystemTestSetupRequest, db: Session = Depends(get_db
 
     # Pod K's shared test approach uses a reset baseline and a controllable clock.
     # Setup therefore clears project data and releases any previously fixed clock.
+    db.execute(delete(AuditEntry))
+    db.execute(delete(ReportRecord))
+    db.execute(delete(TicketExtension))
     db.execute(delete(Ticket))
     db.commit()
     clock.clear_fixed()
