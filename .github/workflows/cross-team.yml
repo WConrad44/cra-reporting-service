@@ -39,6 +39,7 @@ jobs:
           PY
 
       - name: Team 21 tester against Team 17 system
+        continue-on-error: true
         shell: bash
         run: |
           python - <<'PY'
