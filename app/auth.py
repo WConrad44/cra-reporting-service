@@ -13,10 +13,14 @@ def require_token(credentials: HTTPAuthorizationCredentials | None = Security(be
     return credentials.credentials
 
 
-def require_actor(x_actor: str | None = Header(default=None, alias="X-Actor")) -> str:
+def validate_actor(x_actor: str | None) -> str:
     if not x_actor or not x_actor.strip():
         raise HTTPException(status_code=400, detail="X-Actor header is required")
     actor = x_actor.strip()
     if len(actor) > 200:
         raise HTTPException(status_code=400, detail="X-Actor must be at most 200 characters")
     return actor
+
+
+def require_actor(x_actor: str | None = Header(default=None, alias="X-Actor")) -> str:
+    return validate_actor(x_actor)
