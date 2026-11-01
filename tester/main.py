@@ -16,7 +16,7 @@ from .schemas import SessionRequest, SessionResponse, SuiteReport, TesterSetupRe
 
 app = FastAPI(
     title="Team 21 CRA Cross-Team Tester",
-    version="0.4.1",
+    version="0.4.2",
     description="Phase 4 tester for the Pod K CRA Article 14 reporting service.",
 )
 
@@ -137,7 +137,8 @@ def _run_suite(target: str) -> list[dict]:
             "product": {"manufacturer": "Acme", "name": "Router"},
         }
         r = _request("POST", target, "/tickets", json=bad, actor=True)
-        body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+        content_type = r.headers.get("content-type", "")
+        body = r.json() if "json" in content_type else {}
         fields = {e.get("field") for e in body.get("errors", []) if isinstance(e, dict)} if isinstance(body, dict) else set()
         ok = r.status_code == 400 and {"source", "title"}.issubset(fields)
         results.append(_result("AC-02", ok, "Invalid source/missing title rejected with 400 and field errors." if ok else f"Expected 400 with source/title errors; got {r.status_code}."))

@@ -19,7 +19,7 @@ jobs:
           import json, time, urllib.request
           for label, url, expected in [
               ("system", "https://cra-phase3.onrender.com/openapi.json", "0.4.0"),
-              ("tester", "https://cra-phase3-tester.onrender.com/openapi.json", "0.4.1"),
+              ("tester", "https://cra-phase3-tester.onrender.com/openapi.json", "0.4.2"),
           ]:
               for attempt in range(30):
                   try:
@@ -36,7 +36,7 @@ jobs:
                   raise SystemExit(f"{label} did not reach Phase 4")
           PY
 
-      - name: Team 21 tester against Team 21 deployed system
+      - name: Team 21 tester against Team 21 deployed system (problem+json parser rerun)
         shell: bash
         run: |
           python - <<'PY'
