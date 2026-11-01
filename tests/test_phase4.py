@@ -552,7 +552,9 @@ def test_team17_regression_user_advisory_includes_severity(client):
         headers=AUTH_ONLY,
     )
     assert response.status_code == 200
-    assert response.json()["content"]["severity"] == "high"
+    content = response.json()["content"]
+    assert content["severity"] == "high"
+    assert content["mitigations"] == {"for_users": "Upgrade immediately."}
 
 
 def test_team17_regression_method_not_allowed_uses_problem_json(client):
