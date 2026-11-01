@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from threading import Lock
@@ -31,6 +32,10 @@ class TesterSession:
 
 _sessions: dict[str, TesterSession] = {}
 _lock = Lock()
+_http = httpx.Client(
+    timeout=REQUEST_TIMEOUT_SECONDS,
+    follow_redirects=True,
+)
 
 
 def _base_url(value: str) -> str:
@@ -52,13 +57,11 @@ def _headers(target_url: str, *, actor: bool = False) -> dict[str, str]:
 
 
 def _request(method: str, target_url: str, path: str, *, json=None, actor=False) -> httpx.Response:
-    return httpx.request(
+    return _http.request(
         method,
         f"{target_url}{path}",
         headers=_headers(target_url, actor=actor),
         json=json,
-        timeout=REQUEST_TIMEOUT_SECONDS,
-        follow_redirects=True,
     )
 
 
@@ -574,8 +577,7 @@ def _run_suite(target: str) -> list[dict]:
     # AC-13: 500 malformed requests must never produce a 5xx or create data.
     try:
         _reset_and_clock(target, "2026-10-20T12:00:00Z")
-        ok = True
-        for i in range(500):
+        def malformed(i: int) -> bool:
             response = _request(
                 "POST",
                 target,
@@ -587,9 +589,10 @@ def _run_suite(target: str) -> list[dict]:
                 },
                 actor=True,
             )
-            if not (400 <= response.status_code < 500):
-                ok = False
-                break
+            return 400 <= response.status_code < 500
+
+        with ThreadPoolExecutor(max_workers=20) as pool:
+            ok = all(pool.map(malformed, range(500)))
         listing = _request("GET", target, "/tickets")
         ok = ok and listing.status_code == 200 and listing.json() == []
         results.append(_result("AC-13", ok, "500 malformed requests produced no 5xx and no stored tickets." if ok else "Malformed-request behavior did not match AC-13."))
