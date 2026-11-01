@@ -16,4 +16,7 @@ def require_token(credentials: HTTPAuthorizationCredentials | None = Security(be
 def require_actor(x_actor: str | None = Header(default=None, alias="X-Actor")) -> str:
     if not x_actor or not x_actor.strip():
         raise HTTPException(status_code=400, detail="X-Actor header is required")
-    return x_actor.strip()
+    actor = x_actor.strip()
+    if len(actor) > 200:
+        raise HTTPException(status_code=400, detail="X-Actor must be at most 200 characters")
+    return actor
