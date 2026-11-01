@@ -343,6 +343,11 @@ def draft_content(ticket_data: dict, report_type: str) -> tuple[dict, list[str]]
         if value is not None:
             content[field] = value
 
+    if report_type == "user_advisory" and "mitigations" in content:
+        content["mitigations"] = {
+            "for_users": content["mitigations"].get("for_users")
+        }
+
     missing = []
     for path in rule["required"]:
         value = _value(ticket_data, path)
