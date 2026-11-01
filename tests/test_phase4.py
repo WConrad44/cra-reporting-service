@@ -406,3 +406,161 @@ def test_ac16_reporter_confidentiality_across_reads_and_errors(client):
     ]
     for response in responses:
         assert secret not in response.text
+
+
+
+def test_team17_regression_actor_length_and_unknown_ticket_precedence(client):
+    set_clock(client, "2026-10-20T12:00:00Z")
+    ticket = create(client, full_ticket())
+    triage(client, ticket["id"])
+    for report_type in ("early_warning", "notification", "final_report"):
+        response = client.post(
+            f"/tickets/{ticket['id']}/reports/{report_type}/submission",
+            headers=HEADERS,
+            json={},
+        )
+        assert response.status_code == 200, response.text
+
+    long_actor = dict(AUTH_ONLY)
+    long_actor["X-Actor"] = "x" * 201
+    response = client.post(f"/tickets/{ticket['id']}/close", headers=long_actor)
+    assert response.status_code == 400
+    assert response.json()["errors"][0]["field"] == "X-Actor"
+
+    response = client.post(
+        "/tickets/not-an-id/close",
+        headers=AUTH_ONLY,
+    )
+    assert response.status_code == 404
+
+
+def test_team17_regression_submission_validation_precedes_state_and_conflict(client):
+    set_clock(client, "2026-10-20T12:00:00Z")
+    received = create(client, base_ticket())
+
+    null_time = client.post(
+        f"/tickets/{received['id']}/reports/early_warning/submission",
+        headers=HEADERS,
+        json={"submitted_at": None},
+    )
+    assert null_time.status_code == 400
+    assert {error["field"] for error in null_time.json()["errors"]} == {"submitted_at"}
+
+    null_reference = client.post(
+        f"/tickets/{received['id']}/reports/early_warning/submission",
+        headers=HEADERS,
+        json={"reference": None},
+    )
+    assert null_reference.status_code == 400
+    assert {error["field"] for error in null_reference.json()["errors"]} == {"reference"}
+
+    null_body = client.request(
+        "POST",
+        f"/tickets/{received['id']}/reports/early_warning/submission",
+        headers={**HEADERS, "Content-Type": "application/json"},
+        content=b"null",
+    )
+    assert null_body.status_code == 400
+
+    reportable = create(client, full_ticket(title="Duplicate validation"))
+    triage(client, reportable["id"])
+    first = client.post(
+        f"/tickets/{reportable['id']}/reports/early_warning/submission",
+        headers=HEADERS,
+        json={},
+    )
+    assert first.status_code == 200
+    duplicate_bad_body = client.post(
+        f"/tickets/{reportable['id']}/reports/early_warning/submission",
+        headers=HEADERS,
+        json={"reference": None},
+    )
+    assert duplicate_bad_body.status_code == 400
+
+
+def test_team17_regression_submission_aggregates_422_errors(client):
+    set_clock(client, "2026-10-20T12:00:00Z")
+    ticket = create(
+        client,
+        full_ticket(member_states=[]),
+    )
+    triage(client, ticket["id"])
+
+    response = client.post(
+        f"/tickets/{ticket['id']}/reports/early_warning/submission",
+        headers=HEADERS,
+        json={"submitted_at": "2026-10-20T12:00:01Z"},
+    )
+    assert response.status_code == 422
+    assert {error["field"] for error in response.json()["errors"]} == {
+        "member_states",
+        "submitted_at",
+    }
+
+
+def test_team17_regression_submission_target_precedes_body_and_actor(client):
+    set_clock(client, "2026-10-20T12:00:00Z")
+    existing = create(client, base_ticket())
+
+    response = client.request(
+        "POST",
+        f"/tickets/{existing['id']}/reports/user_advisory/submission",
+        headers={**AUTH_ONLY, "Content-Type": "application/json"},
+        content=b"{bad",
+    )
+    assert response.status_code == 404
+
+    response = client.request(
+        "POST",
+        "/tickets/not-an-id/reports/early_warning/submission",
+        headers={**AUTH_ONLY, "Content-Type": "application/json"},
+        content=b"{bad",
+    )
+    assert response.status_code == 404
+
+
+def test_team17_regression_auth_precedes_oversized_body(client):
+    oversized = b"x" * 65537
+
+    response = client.request(
+        "POST",
+        "/tickets/not-an-id/reports/unknown/submission",
+        headers={"Content-Type": "application/json"},
+        content=oversized,
+    )
+    assert response.status_code == 401
+
+    response = client.request(
+        "POST",
+        "/tickets/not-an-id/reports/unknown/submission",
+        headers={
+            "Authorization": "Bearer definitely-wrong-token",
+            "Content-Type": "application/json",
+        },
+        content=oversized,
+    )
+    assert response.status_code == 401
+
+
+def test_team17_regression_user_advisory_includes_severity(client):
+    set_clock(client, "2026-10-20T12:00:00Z")
+    ticket = create(client, full_ticket())
+    triage(client, ticket["id"])
+
+    response = client.get(
+        f"/tickets/{ticket['id']}/reports/user_advisory",
+        headers=AUTH_ONLY,
+    )
+    assert response.status_code == 200
+    assert response.json()["content"]["severity"] == "high"
+
+
+def test_team17_regression_method_not_allowed_uses_problem_json(client):
+    ticket = create(client, base_ticket())
+    response = client.delete(
+        f"/tickets/{ticket['id']}/audit",
+        headers=AUTH_ONLY,
+    )
+    assert response.status_code == 405
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.json()["status"] == 405
