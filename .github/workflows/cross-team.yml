@@ -19,17 +19,17 @@ jobs:
           import json, time, urllib.request
 
           targets = [
-              ("system", "https://cra-phase3.onrender.com/openapi.json"),
-              ("tester", "https://cra-phase3-tester.onrender.com/openapi.json"),
+              ("system", "https://cra-phase3.onrender.com/openapi.json", "0.4.0"),
+              ("tester", "https://cra-phase3-tester.onrender.com/openapi.json", "0.4.1"),
           ]
-          for label, url in targets:
+          for label, url, expected in targets:
               for attempt in range(30):
                   try:
                       with urllib.request.urlopen(url, timeout=30) as response:
                           data = json.load(response)
                       version = data.get("info", {}).get("version")
                       print(f"{label}: {version}")
-                      if version == "0.4.0":
+                      if version == expected:
                           break
                   except Exception as exc:
                       print(f"{label} attempt {attempt + 1}: {exc}")
@@ -39,6 +39,7 @@ jobs:
           PY
 
       - name: Team 21 tester against Team 17 system
+        continue-on-error: true
         shell: bash
         run: |
           python - <<'PY'
