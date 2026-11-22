@@ -94,6 +94,17 @@ async def http_exception_handler(
     request: Request,
     exc: HTTPException,
 ):
+    if request.url.path in {"/test/setup", "/test/report"}:
+        detail = exc.detail
+        if isinstance(detail, dict):
+            message = str(detail.get("message") or detail.get("detail") or detail)
+        else:
+            message = str(detail)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"message": message or "Test-interface request failed", "source": "system"},
+        )
+
     titles = {
         400: "Invalid request",
         401: "Unauthorized",
