@@ -7,3 +7,4 @@ pydantic>=2.10,<3
 httpx>=0.28,<1
 
 coverage>=7,<8
+orjson>=3.10,<4
