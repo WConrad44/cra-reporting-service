@@ -33,6 +33,38 @@ now verifies that all recorded reports and the user advisory remain readable
 after closure. A fresh, coordinated, non-overlapping independent run is needed
 to verify the deployed behavior.
 
+## November 22 live Phase 5 verification
+
+- [Independent Team 17 functional run 45063917221](https://github.com/WConrad44/cra-reporting-service/actions/runs/45063917221):
+  **241/241 passed** against Team 21, 0 failures.
+- [Independent generated malformed run 45064603073](https://github.com/WConrad44/cra-reporting-service/actions/runs/45064603073):
+  **664/664 distinct malformed inputs** over 133 fault categories; 0 HTTP 5xx,
+  0 contract mismatches.
+- [Independent performance run 45065040575, attempt 2](https://github.com/WConrad44/cra-reporting-service/actions/runs/45065040575):
+  **AC-18 PASS**, 1,000 tickets; 200 validated sequential requests;
+  p50 95.2 ms, p95 **583.0 ms**, p99 756.8 ms; 0 unexpected responses.
+  The earlier attempt at the same run ID failed at p95 1710.7 ms.
+- [Team 21 deployed tester run 45067009901](https://github.com/WConrad44/cra-reporting-service/actions/runs/45067009901):
+  **17/18 passed**; AC-18 p95 **3778 ms**, 200 requests, 0 unexpected statuses.
+
+**These AC-18 samples are not directly comparable.** The Team 21 benchmark
+loads 1,000 all-received tickets and executes 50 large
+`GET /tickets?state=received` operations, plus 50 each of single-ticket GET,
+PATCH, and audit GET. The independent Team 17 benchmark has a different
+dataset and request mix, including 20 total list requests. In addition,
+Team 21's deployed tester runs on Render, whereas the Team 17 tester runs on
+a GitHub-hosted runner. Neither run establishes how much of the difference is
+caused by system JSON encoding, dataset, or tester CPU.
+
+The **tester efficiency and list serialization PR** directly addresses these
+differences without weakening AC-18: the same 1,000/200 and 50/50/50/50
+Team 21 mix is retained; results now report per-operation p95. The
+`Deployed self-validation` workflow can run the same tester source on a
+GitHub runner (default) or the published Render tester (optional), with
+execution host labelled in its evidence. Both modes target the same deployed
+Team 21 service; the GitHub mode does **not** count as proof that the
+published Render tester itself is fast. A live rerun is required.
+
 ## Post-merge regression verification
 
 [GitHub CI run 45063121354](https://github.com/WConrad44/cra-reporting-service/actions/runs/45063121354)

@@ -56,7 +56,7 @@ def _base_url(value: str) -> str:
 
 
 def _headers(target_url: str, *, actor: bool = False) -> dict[str, str]:
-    headers = {"accept": "application/json"}
+    headers = {"accept": "application/json", "accept-encoding": "gzip"}
     token = token_for_target(target_url)
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -113,6 +113,87 @@ def _ticket(title: str = "Auth bypass") -> dict:
         },
         "reporter": {"name": "J. Doe", "contact": "phase3-test@example.org"},
     }
+
+
+def _nearest_rank_p95(samples: list[float]) -> float:
+    """Nearest-rank 95th percentile, as in the Pod K AC-18 requirement."""
+    ordered = sorted(samples)
+    return ordered[max(0, (len(ordered) * 95 + 99) // 100 - 1)]
+
+
+def _run_ac18(target: str) -> dict:
+    """Measure complete remote HTTP responses, preserving Team 21's test mix.
+
+    Each of the 200 operations is timed one at a time, after loading exactly
+    1,000 tickets. The 50 large-list requests are intentionally retained.
+    No measured request is retried or skipped; unexpected statuses fail.
+    """
+    try:
+        _reset_and_clock(target, "2026-10-20T12:00:00Z")
+        ticket_ids = []
+        for i in range(1000):
+            created = _request(
+                "POST",
+                target,
+                "/tickets",
+                json=_ticket(f"Performance {i}"),
+                actor=True,
+            )
+            if created.status_code != 201:
+                raise RuntimeError(
+                    f"Performance setup stopped at ticket {i}: "
+                    f"{created.status_code} {_message_from_response(created)}"
+                )
+            ticket_ids.append(created.json()["id"])
+
+        timings = []
+        statuses = []
+        labels = ("get_ticket", "list_received", "patch_ticket", "get_audit")
+        by_operation = {label: [] for label in labels}
+
+        for i in range(200):
+            kind = i % 4
+            if kind == 0:
+                method, path, payload, actor = "GET", f"/tickets/{ticket_ids[i]}", None, False
+            elif kind == 1:
+                method, path, payload, actor = "GET", "/tickets?state=received", None, False
+            elif kind == 2:
+                method, path, payload, actor = (
+                    "PATCH",
+                    f"/tickets/{ticket_ids[i]}",
+                    {"description": f"Performance update {i}"},
+                    True,
+                )
+            else:
+                method, path, payload, actor = "GET", f"/tickets/{ticket_ids[i]}/audit", None, False
+
+            started = time.perf_counter()
+            response = _request(method, target, path, json=payload, actor=actor)
+            elapsed = time.perf_counter() - started
+            timings.append(elapsed)
+            statuses.append(response.status_code)
+            by_operation[labels[kind]].append(elapsed)
+
+        p95 = _nearest_rank_p95(timings)
+        unexpected = [(index, status) for index, status in enumerate(statuses) if status != 200]
+        operation_summary = ", ".join(
+            f"{label}: n={len(samples)} p95={_nearest_rank_p95(samples):.3f}s"
+            for label, samples in by_operation.items()
+        )
+        return _result(
+            "AC-18",
+            not unexpected and p95 <= 1.0,
+            (
+                f"1,000-ticket performance test completed; p95={p95:.3f}s "
+                f"across 200 sequential mixed requests; "
+                f"unexpected HTTP statuses (request index, status)={unexpected[:12]}; "
+                f"per-operation {operation_summary}."
+            ),
+        )
+    except httpx.RequestError as exc:
+        return _error_result("AC-18", "communication", str(exc))
+    except Exception as exc:
+        return _error_result("AC-18", "tester", str(exc))
 
 
 def _run_suite(target: str) -> list[dict]:
@@ -692,67 +773,9 @@ def _run_suite(target: str) -> list[dict]:
     except Exception as exc:
         results.append(_error_result("AC-16", "tester", str(exc)))
 
-    # AC-18 / REQ-17: 1,000 stored tickets; 200 sequential mixed requests; p95 <= 1s.
-    try:
-        _reset_and_clock(target, "2026-10-20T12:00:00Z")
-        ticket_ids = []
-        for i in range(1000):
-            created = _request(
-                "POST",
-                target,
-                "/tickets",
-                json=_ticket(f"Performance {i}"),
-                actor=True,
-            )
-            if created.status_code != 201:
-                raise RuntimeError(
-                    f"Performance setup stopped at ticket {i}: "
-                    f"{created.status_code} {_message_from_response(created)}"
-                )
-            ticket_ids.append(created.json()["id"])
-
-        timings = []
-        statuses = []
-        for i in range(200):
-            kind = i % 4
-            if kind == 0:
-                method, path, payload, actor = "GET", f"/tickets/{ticket_ids[i]}", None, False
-            elif kind == 1:
-                method, path, payload, actor = "GET", "/tickets?state=received", None, False
-            elif kind == 2:
-                method, path, payload, actor = (
-                    "PATCH",
-                    f"/tickets/{ticket_ids[i]}",
-                    {"description": f"Performance update {i}"},
-                    True,
-                )
-            else:
-                method, path, payload, actor = "GET", f"/tickets/{ticket_ids[i]}/audit", None, False
-
-            started = time.perf_counter()
-            response = _request(method, target, path, json=payload, actor=actor)
-            timings.append(time.perf_counter() - started)
-            statuses.append(response.status_code)
-
-        ordered = sorted(timings)
-        p95 = ordered[max(0, int(len(ordered) * 0.95) - 1)]
-        unexpected = [(index, status) for index, status in enumerate(statuses) if status != 200]
-        ok = not unexpected and p95 <= 1.0
-        results.append(
-            _result(
-                "AC-18",
-                ok,
-                (
-                    f"1,000-ticket performance test completed; p95={p95:.3f}s "
-                    f"across 200 sequential mixed requests; "
-                    f"unexpected HTTP statuses (request index, status)={unexpected[:12]}."
-                ),
-            )
-        )
-    except httpx.RequestError as exc:
-        results.append(_error_result("AC-18", "communication", str(exc)))
-    except Exception as exc:
-        results.append(_error_result("AC-18", "tester", str(exc)))
+    # Preserve the full 1,000-ticket / 200-request benchmark, including
+    # fifty large-list reads. This may exceed the published acceptance minimum.
+    results.append(_run_ac18(target))
 
     return results
 

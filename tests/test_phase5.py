@@ -95,3 +95,55 @@ def test_ticket_list_uses_constant_number_of_selects():
     assert response.status_code == 200
     assert len(response.json()) == 25
     assert len(selects) <= 3
+
+
+
+def test_list_avoids_recursive_fastapi_reencoding(monkeypatch, client):
+    """Large-list JSON is pre-encoded without changing the contract or privacy."""
+    import fastapi.routing
+
+    created_ids = []
+    for number in range(12):
+        response = client.post(
+            "/tickets",
+            headers=HEADERS,
+            json={
+                "source": "customer",
+                "title": f"JSON encoding regression {number}",
+                "description": "A report with nested product fields.",
+                "product": {
+                    "manufacturer": "Acme",
+                    "name": "Router",
+                    "affected_versions": ["1.0"],
+                },
+                "reporter": {
+                    "name": "Example",
+                    "contact": "never-show-in-list@example.invalid",
+                },
+            },
+        )
+        assert response.status_code == 201, response.text
+        created_ids.append(response.json()["id"])
+
+    def unexpected_jsonable_encoder(*args, **kwargs):
+        raise AssertionError("GET /tickets should return a ready-to-send JSON response")
+
+    # FastAPI does not call jsonable_encoder when a route returns a Response.
+    with monkeypatch.context() as patch:
+        patch.setattr(fastapi.routing, "jsonable_encoder", unexpected_jsonable_encoder)
+        response = client.get(
+            "/tickets",
+            headers={**AUTH_ONLY, "Accept-Encoding": "gzip"},
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.headers.get("content-encoding") == "gzip"
+    listing = response.json()
+    assert len(listing) == 12
+    assert {item["id"] for item in listing} == set(created_ids)
+    assert all("reporter" not in item for item in listing)
+    assert "never-show-in-list@example.invalid" not in response.text
+    assert all(set(item["obligations"]) == {
+        "early_warning", "notification", "final_report"
+    } for item in listing)
