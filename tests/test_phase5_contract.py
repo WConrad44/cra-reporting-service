@@ -90,3 +90,27 @@ def test_recorded_reports_and_advisory_remain_readable_after_resolution(client):
     after = [client.get(path, headers=AUTH_ONLY) for path in paths]
     assert all(response.status_code == 200 for response in after)
     assert [response.json() for response in after] == [response.json() for response in before]
+
+
+def test_large_ticket_listing_uses_gzip_when_requested(client):
+    for number in range(20):
+        created = client.post(
+            "/tickets",
+            headers=HEADERS,
+            json={
+                "source": "customer",
+                "title": f"Compression test {number}",
+                "description": "Repeated example description for larger responses.",
+                "product": {"manufacturer": "Acme", "name": "Router"},
+            },
+        )
+        assert created.status_code == 201, created.text
+
+    listing = client.get(
+        "/tickets",
+        headers={**AUTH_ONLY, "Accept-Encoding": "gzip"},
+    )
+    assert listing.status_code == 200, listing.text
+    assert len(listing.json()) == 20
+    assert listing.headers.get("content-encoding") == "gzip"
+    assert "Accept-Encoding" in listing.headers.get("vary", "")
