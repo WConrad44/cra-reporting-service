@@ -16,6 +16,7 @@ The authoritative Pod K requirements and interface are maintained with Team 17 i
 - Tester: https://cra-phase3-tester.onrender.com
 - Hosting: Render, Virginia region, Python/FastAPI
 - Health: `GET /health`
+- Registry **Access/Run Notes:** [How to open the deployed API and run the tester](docs/registry-access-run-notes.md) — direct links to /docs, authorization guidance, and Swagger/terminal examples.
 
 The Render services are linked to this GitHub repository. A push/merge to `main` triggers
 a new deployment. The public service can scale down when idle, so warm it with `GET /health`
