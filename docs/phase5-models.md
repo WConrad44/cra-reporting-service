@@ -110,7 +110,8 @@ flowchart LR
     Rules --> ORM["SQLAlchemy sessions and models"]
     ORM --> DB[("Render PostgreSQL — Virginia")]
     Entry -->|"POST /test/setup: start session coverage"| Coverage
-    Rules -.->|"executed app lines measured"| Coverage
+    Entry -.->|"executed route and validation lines"| Coverage
+    Rules -.->|"executed domain lines"| Coverage
     Coverage -->|"GET /test/report: covered/total/basis"| Entry
 ```
 
