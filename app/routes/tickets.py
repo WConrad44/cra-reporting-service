@@ -28,6 +28,7 @@ from ..services.tickets import (
     get_draft,
     serialize_audit,
     serialize_ticket,
+    serialize_ticket_preloaded,
     snapshot_fields,
 )
 
@@ -140,12 +141,37 @@ def list_tickets(
             detail={"field": "obligation_status", "message": "invalid obligation status"},
         )
 
-    rows = db.query(Ticket).all()
+    query = db.query(Ticket)
+    if state is not None:
+        query = query.filter(Ticket.state == state)
+    rows = query.all()
+
+    ticket_ids = [ticket.id for ticket in rows]
+    extensions_by_ticket: dict[str, TicketExtension] = {}
+    reports_by_ticket: dict[str, dict[str, ReportRecord]] = {}
+
+    if ticket_ids:
+        extensions_by_ticket = {
+            ext.ticket_id: ext
+            for ext in db.query(TicketExtension)
+            .filter(TicketExtension.ticket_id.in_(ticket_ids))
+            .all()
+        }
+        for report in (
+            db.query(ReportRecord)
+            .filter(ReportRecord.ticket_id.in_(ticket_ids))
+            .all()
+        ):
+            reports_by_ticket.setdefault(report.ticket_id, {})[report.report_type] = report
+
     data = []
     for ticket in rows:
-        item = without_reporter(ticket, db)
-        if state is not None and item["state"] != state:
-            continue
+        item = serialize_ticket_preloaded(
+            ticket,
+            extensions_by_ticket.get(ticket.id),
+            reports_by_ticket.get(ticket.id, {}),
+        )
+        item.pop("reporter", None)
         if obligation_status is not None and not any(
             obligation["status"] == obligation_status
             for obligation in item["obligations"].values()
