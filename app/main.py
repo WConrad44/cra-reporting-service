@@ -55,6 +55,12 @@ async def validation_exception_handler(
     request: Request,
     exc: RequestValidationError,
 ):
+    if request.url.path in {"/test/setup", "/test/report"}:
+        return JSONResponse(
+            status_code=400,
+            content={"message": "Invalid test-interface request", "source": "system"},
+        )
+
     errors = []
 
     for error in exc.errors():
