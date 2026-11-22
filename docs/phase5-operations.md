@@ -24,6 +24,19 @@ The existence of a Render PostgreSQL instance alone does *not* prove that the se
 
 ## Validation sequence
 
+The GitHub deployed-self, cross-team and independent Phase 5 workflows are
+**manual-only** because every run resets its target's ticket data. Before running
+any of them, coordinate with Team 17 and other Team 21 operators.
+
+For the latest verified and incomplete acceptance results, see the
+[Phase 5 evidence ledger](phase5-results.md). For an independent load test,
+select the `performance` option of the
+`Independent Phase 5 acceptance evidence (Team 17 runner)` GitHub workflow.
+This workflow requires a GitHub Actions secret named `TEAM21_API_TOKEN`.
+Its `malformed` and `full-functional` options provide additional independent
+evidence. Save every generated artifact, including failure reports.
+
+
 Do not run suites against the same target simultaneously: they call `POST /test/reset` and permanently delete its data. The GitHub deployed-self and cross-team workflows share a concurrency group to serialize runs within Team 21's repository, but coordinate separately with Team 17 and instructors.
 
 1. Merge the code changes and wait for the canonical system and tester to deploy.
@@ -56,13 +69,10 @@ Record the resulting pass/fail output along with the Render restart event/time a
 
 ## Evidence status as of 2026-11-22
 
-- **Implemented in main:** PostgreSQL engine configuration, Phase 5 code coverage, `coverage.model` for same-team reports, AC-18 tester case, AC-19 restart helper, and the Phase 5 design-to-test mapping.
-- **CI verified:** GitHub Actions run [45056305121](https://github.com/WConrad44/cra-reporting-service/actions/runs/45056305121): 38 tests passed on SQLite and 38 on PostgreSQL.
-- **Deployed self-validation not yet passing:** Recorded run [45051081662](https://github.com/WConrad44/cra-reporting-service/actions/runs/45051081662) returned 12 pass and 6 fail; AC-10, 11, 12, 13, 16, and 18 need a rerun with better diagnostics. AC-18 reported p95 0.104 s, but the status assertion failed, so it **cannot yet be claimed as passed**.
-- **Cross-team not yet passing:** Run [45051081653](https://github.com/WConrad44/cra-reporting-service/actions/runs/45051081653) returned 17 pass and 1 fail in the Team 21 → Team 17 direction (AC-13); the reverse-direction workflow got 401 calling the protected Team 17 tester without its bearer token.
-- **Not yet evidenced:** Connection of the canonical Render web service to the new PostgreSQL instance; recorded AC-19 restart result; complete passing deployed and reciprocal test suites.
-
-Update these bullets with the final artifacts, exact run links, tested commit SHAs and dates after the successful checks. Do not mark incomplete acceptance criteria as passed.
+The latest results, including the 17/18 deployed self-run, the 502-based AC-18
+failure, the 233/241 external suite, and operator-reported AC-19 pass, are
+maintained in [Phase 5 results](phase5-results.md). Do not use the older
+green-but-failing workflow reports as passing evidence.
 
 ## Submission artifacts
 
