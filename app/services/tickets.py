@@ -80,15 +80,17 @@ def _status(
     return "overdue" if current > due_at else "pending"
 
 
-def serialize_ticket(ticket: Ticket, db: Session | None = None) -> dict:
+def _serialize_ticket_data(
+    ticket: Ticket,
+    ext: TicketExtension | None,
+    reports: dict[str, ReportRecord],
+) -> dict:
     current = clock.now()
     product = _loads(ticket.product_json) or {}
     reporter = _loads(ticket.reporter_json)
     member_states = _loads(ticket.member_states_json) or []
     vulnerability = _loads(ticket.vulnerability_json)
     fix = _loads(ticket.fix_json)
-    ext = _extension(db, ticket.id) if db is not None else None
-    reports = _reports(db, ticket.id)
 
     is_nonreportable_closed = (
         ticket.state == "closed"
@@ -157,6 +159,20 @@ def serialize_ticket(ticket: Ticket, db: Session | None = None) -> dict:
         "obligations": obligations,
         "next_due_at": _utc_string(next_due),
     }
+
+
+def serialize_ticket(ticket: Ticket, db: Session | None = None) -> dict:
+    ext = _extension(db, ticket.id) if db is not None else None
+    reports = _reports(db, ticket.id)
+    return _serialize_ticket_data(ticket, ext, reports)
+
+
+def serialize_ticket_preloaded(
+    ticket: Ticket,
+    ext: TicketExtension | None,
+    reports: dict[str, ReportRecord],
+) -> dict:
+    return _serialize_ticket_data(ticket, ext, reports)
 
 
 def create_ticket(db: Session, data: TicketCreate) -> Ticket:
