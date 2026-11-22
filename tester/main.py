@@ -5,19 +5,21 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from threading import Lock
 from urllib.parse import urlparse
+import time
 import uuid
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from .config import REQUEST_TIMEOUT_SECONDS, TARGET_ACTOR, token_for_target
+from .config import OWN_SYSTEM_URL, REQUEST_TIMEOUT_SECONDS, TARGET_ACTOR, token_for_target
 from .schemas import SessionRequest, SessionResponse, SuiteReport, TesterSetupRequest
 
 app = FastAPI(
     title="Team 21 CRA Cross-Team Tester",
-    version="0.4.2",
-    description="Phase 4 tester for the Pod K CRA Article 14 reporting service.",
+    version="0.5.0",
+    description="Phase 5 tester for the Pod K CRA Article 14 reporting service.",
 )
 
 
@@ -36,6 +38,14 @@ _http = httpx.Client(
     timeout=REQUEST_TIMEOUT_SECONDS,
     follow_redirects=True,
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def tester_validation_error(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=400,
+        content={"message": "Invalid test-interface request", "source": "tester"},
+    )
 
 
 def _base_url(value: str) -> str:
@@ -634,6 +644,66 @@ def _run_suite(target: str) -> list[dict]:
     except Exception as exc:
         results.append(_error_result("AC-16", "tester", str(exc)))
 
+    # AC-18 / REQ-17: 1,000 stored tickets; 200 sequential mixed requests; p95 <= 1s.
+    try:
+        _reset_and_clock(target, "2026-10-20T12:00:00Z")
+        ticket_ids = []
+        for i in range(1000):
+            created = _request(
+                "POST",
+                target,
+                "/tickets",
+                json=_ticket(f"Performance {i}"),
+                actor=True,
+            )
+            if created.status_code != 201:
+                raise RuntimeError(
+                    f"Performance setup stopped at ticket {i}: "
+                    f"{created.status_code} {_message_from_response(created)}"
+                )
+            ticket_ids.append(created.json()["id"])
+
+        timings = []
+        statuses = []
+        for i in range(200):
+            kind = i % 4
+            if kind == 0:
+                method, path, payload, actor = "GET", f"/tickets/{ticket_ids[i]}", None, False
+            elif kind == 1:
+                method, path, payload, actor = "GET", "/tickets?state=received", None, False
+            elif kind == 2:
+                method, path, payload, actor = (
+                    "PATCH",
+                    f"/tickets/{ticket_ids[i]}",
+                    {"description": f"Performance update {i}"},
+                    True,
+                )
+            else:
+                method, path, payload, actor = "GET", f"/tickets/{ticket_ids[i]}/audit", None, False
+
+            started = time.perf_counter()
+            response = _request(method, target, path, json=payload, actor=actor)
+            timings.append(time.perf_counter() - started)
+            statuses.append(response.status_code)
+
+        ordered = sorted(timings)
+        p95 = ordered[max(0, int(len(ordered) * 0.95) - 1)]
+        ok = all(status < 400 for status in statuses) and p95 <= 1.0
+        results.append(
+            _result(
+                "AC-18",
+                ok,
+                (
+                    f"1,000-ticket performance test completed; p95={p95:.3f}s "
+                    f"across 200 sequential mixed requests."
+                ),
+            )
+        )
+    except httpx.RequestError as exc:
+        results.append(_error_result("AC-18", "communication", str(exc)))
+    except Exception as exc:
+        results.append(_error_result("AC-18", "tester", str(exc)))
+
     return results
 
 
@@ -644,7 +714,13 @@ def health():
 
 @app.post("/test/setup", response_model=SessionResponse, status_code=201)
 def setup(body: TesterSetupRequest):
-    target = _base_url(str(body.target_url))
+    try:
+        target = _base_url(str(body.target_url))
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=400,
+            content={"message": str(exc), "source": "tester"},
+        )
     session_id = f"run-{uuid.uuid4()}"
 
     try:
@@ -679,14 +755,20 @@ def setup(body: TesterSetupRequest):
     return {"session_id": session_id}
 
 
-@app.post("/test/run", response_model=SuiteReport)
+@app.post("/test/run", response_model=SuiteReport, response_model_exclude_none=True)
 def run(body: SessionRequest):
     with _lock:
         session = _sessions.get(body.session_id)
         if session is None:
-            raise HTTPException(status_code=404, detail="Unknown tester session")
+            return JSONResponse(
+                status_code=404,
+                content={"message": "Unknown tester session", "source": "tester"},
+            )
         if session.running or session.finished:
-            raise HTTPException(status_code=409, detail="This tester session has already been run")
+            return JSONResponse(
+                status_code=409,
+                content={"message": "This tester session has already been run", "source": "tester"},
+            )
         session.running = True
 
     results = _run_suite(session.target_url)
@@ -712,15 +794,32 @@ def run(body: SessionRequest):
             "component": {
                 "covered": None,
                 "total": None,
-                "basis": "The shared Pod K specification does not define a component-coverage list for Phase 3.",
+                "basis": (
+                    "Pod K has not yet published a component-coverage list and "
+                    "exercise rules in the shared specification."
+                ),
             },
             "system": {
-                "covered": 17,
+                "covered": 18,
                 "total": 19,
-                "basis": "The Phase 4 tester checks AC-01 through AC-17 except AC-18 performance; AC-19 restart persistence is demonstrated separately.",
+                "basis": (
+                    "The Phase 5 Team 21 tester evaluates AC-01 through AC-18. "
+                    "AC-19 restart persistence is a recorded owning-team demonstration."
+                ),
             },
         },
     }
+
+    if session.target_url.rstrip("/") == OWN_SYSTEM_URL:
+        report["coverage"]["model"] = {
+            "covered": 3,
+            "total": 4,
+            "basis": (
+                "Phase 5 design requirements DR-01..DR-04 in "
+                "docs/phase5-design.md; automated tests cover DR-02, DR-03, "
+                "and DR-04. DR-01 is verified by the AC-19 restart demonstration."
+            ),
+        }
 
     with _lock:
         session.report = report
@@ -729,12 +828,18 @@ def run(body: SessionRequest):
     return report
 
 
-@app.get("/test/report", response_model=SuiteReport)
+@app.get("/test/report", response_model=SuiteReport, response_model_exclude_none=True)
 def report(session_id: str = Query(min_length=1)):
     with _lock:
         session = _sessions.get(session_id)
         if session is None:
-            raise HTTPException(status_code=404, detail="Unknown tester session")
+            return JSONResponse(
+                status_code=404,
+                content={"message": "Unknown tester session", "source": "tester"},
+            )
         if not session.finished or session.report is None:
-            raise HTTPException(status_code=409, detail="Tester run has not finished")
+            return JSONResponse(
+                status_code=409,
+                content={"message": "Tester run has not finished", "source": "tester"},
+            )
         return session.report
