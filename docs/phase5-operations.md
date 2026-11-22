@@ -13,6 +13,8 @@ This runbook accompanies [Phase 5 design requirements](phase5-design.md). Use on
 
 Use base URLs without a trailing `/test` for the course registry. The Team 21 URLs were already entered in the registry, as confirmed in the November 22 screenshot.
 
+**Access/Run Notes for the registry:** [Browser access, authentication, and running the hosted tester](registry-access-run-notes.md). Do not open the system API base URL as though it were a public website; use `/docs` or public `/health`. The tester exposes `POST /test/setup` and `POST /test/run` through its `/docs` page. GitHub access is not required for either deployed endpoint.
+
 ## Secure configuration
 
 1. In Render, open the *canonical* **team21-cra-reporting-service** (not the older **cra-reporting-service** deployment). Confirm `DATABASE_URL` points to the **team21-cra-postgres** Render PostgreSQL instance via its *internal* PostgreSQL connection URL. The service and database must be in the same Render region; do not paste the database URL into GitHub or test reports.
