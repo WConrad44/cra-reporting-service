@@ -98,11 +98,10 @@ def test_ticket_list_uses_constant_number_of_selects():
 
 
 
-def test_list_avoids_recursive_fastapi_reencoding(monkeypatch):
+def test_list_avoids_recursive_fastapi_reencoding(monkeypatch, client):
     """Large-list JSON is pre-encoded without changing the contract or privacy."""
     import fastapi.routing
 
-    client = TestClient(app)
     created_ids = []
     for number in range(12):
         response = client.post(
