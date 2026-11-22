@@ -7,6 +7,10 @@ from urllib.parse import urlparse
 DEFAULT_TARGET_TOKEN = os.getenv("TARGET_API_TOKEN", "")
 TARGET_ACTOR = os.getenv("TARGET_ACTOR", "team21-tester")
 REQUEST_TIMEOUT_SECONDS = float(os.getenv("TARGET_REQUEST_TIMEOUT_SECONDS", "20"))
+OWN_SYSTEM_URL = os.getenv(
+    "TEAM21_SYSTEM_URL",
+    "https://team21-cra-reporting-service.onrender.com",
+).rstrip("/")
 
 
 def _token_map() -> dict[str, str]:
