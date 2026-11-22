@@ -178,3 +178,52 @@ REQ-17 performance validation are Phase 5 work.
 
 The service does not submit reports directly to ENISA or a CSIRT, automatically determine
 whether exploitation is active, scan products for vulnerabilities, or deploy fixes.
+
+
+## Phase 5 implementation
+
+Phase 5 hardens the delivered reporting workflow rather than changing its CRA lifecycle.
+The implementation adds:
+
+- AC-18 / REQ-17 performance validation: 1,000 stored tickets followed by 200
+  sequential mixed requests with a measured p95 target of at most one second.
+- Session source-line coverage returned by the system through
+  `GET /test/report?session_id=...`.
+- Phase 5 `coverage.model` in Team 21 self-test reports, mapped to
+  `docs/phase5-design.md`; model coverage is omitted for cross-team runs.
+- Revised course test-interface error bodies using nonempty `message` and `source`.
+- PostgreSQL compatibility and CI execution of the complete regression suite against
+  PostgreSQL.
+- `scripts/ac19_restart_check.py` for the owning-team AC-19 restart-persistence
+  demonstration.
+
+### Render PostgreSQL setup required for REQ-18
+
+The code is ready for PostgreSQL, but the database itself must be provisioned in Render.
+For the canonical system service, `team21-cra-reporting-service`:
+
+1. Create a Render PostgreSQL database in the same region as the service (Virginia).
+2. Copy/use its internal database URL.
+3. Add or replace the system service environment variable `DATABASE_URL` with that URL.
+   The application normalizes Render's `postgresql://` URL to the psycopg 3 SQLAlchemy
+   dialect automatically.
+4. Redeploy the system and run the full functional suite.
+5. Run the AC-19 demonstration:
+
+```bash
+export CRA_BASE_URL=https://team21-cra-reporting-service.onrender.com
+export CRA_API_TOKEN='<Team 21 token>'
+python scripts/ac19_restart_check.py prepare
+# Restart/redeploy only the system service in Render.
+python scripts/ac19_restart_check.py verify
+```
+
+The state file produced by the helper contains test data only and must not contain the API
+token. Do not run `/test/reset` between the prepare and verify steps.
+
+### Phase 5 testing-interface coverage
+
+A Team 21 self-test report contains `code`, `component`, `system`, and `model`
+coverage. Cross-team reports intentionally omit `model`. Component coverage remains
+unavailable until Pod K publishes a shared component list and exercise rules; the revised
+course interface permits unavailable measures to use null counts with a nonempty basis.
