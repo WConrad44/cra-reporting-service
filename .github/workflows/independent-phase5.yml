@@ -1,0 +1,101 @@
+name: Independent Phase 5 acceptance evidence (Team 17 runner)
+
+# These suites reset the canonical Team 21 deployment.
+# Run by hand only, and coordinate to avoid overlapping resets.
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "Independent suite to run against Team 21"
+        required: true
+        type: choice
+        default: "performance"
+        options:
+          - performance
+          - malformed
+          - full-functional
+
+concurrency:
+  group: pod-k-deployed-validation
+  cancel-in-progress: false
+
+jobs:
+  independent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CRA_BASE_URL: https://team21-cra-reporting-service.onrender.com
+      CRA_API_TOKEN: ${{ secrets.TEAM21_API_TOKEN }}
+    steps:
+      - name: Require the private Team 21 evaluation token
+        shell: bash
+        run: |
+          if [ -z "$CRA_API_TOKEN" ]; then
+            echo "Add the TEAM21_API_TOKEN GitHub Actions secret before this run."
+            exit 1
+          fi
+
+      - name: Checkout published Team 17 portable acceptance suite
+        uses: actions/checkout@v4
+        with:
+          repository: team17-ece30861/pod-k-shared
+          path: pod-k-shared
+          ref: main
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install independent suite dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest PyYAML "jsonschema[format-nongpl]"
+          if [ "${{ inputs.suite }}" = "malformed" ]; then
+            python -m pip install schemathesis==4.33.0 hypothesis==6.170.14
+          fi
+
+      - name: Warm the canonical evaluation deployment
+        shell: bash
+        run: |
+          python - <<'PY'
+          import urllib.request
+          target = "https://team21-cra-reporting-service.onrender.com/health"
+          with urllib.request.urlopen(target, timeout=90) as response:
+              if response.status != 200:
+                  raise SystemExit("Target health check failed.")
+              print("Target health check passed (untimed).")
+          PY
+
+      - name: Run independent acceptance suite
+        shell: bash
+        working-directory: pod-k-shared/team17/tester
+        run: |
+          case "${{ inputs.suite }}" in
+            performance)
+              python -m acceptance.perf --reset --out "$GITHUB_WORKSPACE/phase5-independent-perf.json"
+              ;;
+            malformed)
+              python -m acceptance.malformed --reset --out "$GITHUB_WORKSPACE/phase5-independent-malformed.json"
+              ;;
+            full-functional)
+              python -m pytest -c acceptance/pytest.ini acceptance --allow-reset -q \
+                --report "$GITHUB_WORKSPACE/phase5-independent-functional.json" \
+                --operation-report "$GITHUB_WORKSPACE/phase5-independent-operations.md"
+              ;;
+            *)
+              echo "Unknown selected suite"
+              exit 2
+              ;;
+          esac
+
+      - name: Upload evidence even when independent validation fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase5-independent-${{ inputs.suite }}
+          path: |
+            phase5-independent-*.json
+            phase5-independent-*.md
+          if-no-files-found: warn
