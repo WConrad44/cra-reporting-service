@@ -1,6 +1,7 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import ORJSONResponse
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -187,7 +188,10 @@ def list_tickets(
             item["id"],
         )
     )
-    return data
+    # These values are already plain JSON primitives. Return a pre-encoded
+    # response rather than recursively running FastAPI's jsonable_encoder
+    # over 1,000 nested tickets and obligations a second time.
+    return ORJSONResponse(content=data)
 
 
 @router.get(
