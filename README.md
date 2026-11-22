@@ -182,6 +182,9 @@ whether exploitation is active, scan products for vulnerabilities, or deploy fix
 
 ## Phase 5 implementation
 
+See [Phase 5 operations and evidence](docs/phase5-operations.md) for the Render PostgreSQL setup, deployed/cross-team checks, AC-19 restart demonstration, and evidence status.
+
+
 Phase 5 hardens the delivered reporting workflow rather than changing its CRA lifecycle.
 The implementation adds:
 

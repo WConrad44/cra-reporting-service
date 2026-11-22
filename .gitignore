@@ -1,0 +1,26 @@
+# Credentials and per-machine configuration
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+
+# Generated test and restart evidence (store artifacts outside Git)
+ac19-state.json
+ac19-state*.json
+cra-ci.db
+cra-ci.db-*
+*.db-journal
+*.db-wal
+*.db-shm
+.coverage
+.coverage.*
+.pytest_cache/
+.ruff_cache/
+
+# Python intermediates
+__pycache__/
+*.py[cod]
+
+# OS
+.DS_Store

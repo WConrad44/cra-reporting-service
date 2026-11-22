@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from threading import Lock
@@ -509,7 +508,12 @@ def _run_suite(target: str) -> list[dict]:
             statuses.append(response.status_code)
         closed = _request("POST", target, f"/tickets/{ticket_id}/close", actor=True)
         ok = statuses == [200, 200, 200] and closed.status_code == 200 and closed.json().get("resolution") == "resolved"
-        results.append(_result("AC-10", ok, "Full submit-to-close incident completed successfully." if ok else "Full lifecycle did not match AC-10."))
+        results.append(_result(
+            "AC-10",
+            ok,
+            "Full submit-to-close incident completed successfully."
+            if ok else f"Lifecycle returned submission statuses={statuses}; close status={closed.status_code}.",
+        ))
     except httpx.RequestError as exc:
         results.append(_error_result("AC-10", "communication", str(exc)))
     except Exception as exc:
@@ -542,10 +546,18 @@ def _run_suite(target: str) -> list[dict]:
         ok = (
             listed.status_code == 200
             and filtered.status_code == 200
+            and all(item["id"] in ids for item in (first, second, received))
             and ids.index(first["id"]) < ids.index(second["id"]) < ids.index(received["id"])
             and filtered_ids == {first["id"], second["id"]}
         )
-        results.append(_result("AC-11", ok, "Listing filters and deadline ordering behaved correctly." if ok else "List behavior did not match AC-11."))
+        results.append(_result(
+            "AC-11", ok,
+            "Listing filters and deadline ordering behaved correctly."
+            if ok else (
+                f"List check failed: all={listed.status_code}/{len(ids)}, "
+                f"filtered={filtered.status_code}/{len(filtered_ids)}."
+            ),
+        ))
     except httpx.RequestError as exc:
         results.append(_error_result("AC-11", "communication", str(exc)))
     except Exception as exc:
@@ -579,7 +591,14 @@ def _run_suite(target: str) -> list[dict]:
             and len(before.json()) == len(entries) == 2
             and [entry.get("seq") for entry in entries] == [1, 2]
         )
-        results.append(_result("AC-12", ok, "Audit entries were append-only and failures added nothing." if ok else "Audit behavior did not match AC-12."))
+        results.append(_result(
+            "AC-12", ok,
+            "Audit entries were append-only and failures added nothing."
+            if ok else (
+                f"Audit status before/after={before.status_code}/{after.status_code}; "
+                f"entries before/after={len(before.json()) if before.status_code == 200 else 'N/A'}/{len(entries)}."
+            ),
+        ))
     except httpx.RequestError as exc:
         results.append(_error_result("AC-12", "communication", str(exc)))
     except Exception as exc:
@@ -588,7 +607,7 @@ def _run_suite(target: str) -> list[dict]:
     # AC-13: 500 malformed requests must never produce a 5xx or create data.
     try:
         _reset_and_clock(target, "2026-10-20T12:00:00Z")
-        def malformed(i: int) -> bool:
+        def malformed(i: int) -> tuple[int, bool]:
             response = _request(
                 "POST",
                 target,
@@ -600,13 +619,34 @@ def _run_suite(target: str) -> list[dict]:
                 },
                 actor=True,
             )
-            return 400 <= response.status_code < 500
+            try:
+                body = response.json()
+            except ValueError:
+                body = {}
+            valid = (
+                response.status_code == 400
+                and "application/problem+json" in response.headers.get("content-type", "")
+                and isinstance(body, dict)
+                and body.get("status") == 400
+                and isinstance(body.get("errors"), list)
+            )
+            return response.status_code, valid
 
-        with ThreadPoolExecutor(max_workers=20) as pool:
-            ok = all(pool.map(malformed, range(500)))
+        # AC-13 does not require concurrent requests. Serial calls avoid
+        # overloading the shared deployment and make failures reproducible.
+        checks = [malformed(i) for i in range(500)]
         listing = _request("GET", target, "/tickets")
-        ok = ok and listing.status_code == 200 and listing.json() == []
-        results.append(_result("AC-13", ok, "500 malformed requests produced no 5xx and no stored tickets." if ok else "Malformed-request behavior did not match AC-13."))
+        unexpected = [(i, status) for i, (status, valid) in enumerate(checks) if not valid]
+        ok = not unexpected and listing.status_code == 200 and listing.json() == []
+        results.append(_result(
+            "AC-13", ok,
+            "500 sequential malformed requests returned valid problem+json 400 errors and created no tickets."
+            if ok else (
+                f"Malformed requests had {len(unexpected)} invalid status/schema responses "
+                f"(first 12 request index/status pairs={unexpected[:12]}); "
+                f"list status={listing.status_code}."
+            ),
+        ))
     except httpx.RequestError as exc:
         results.append(_error_result("AC-13", "communication", str(exc)))
     except Exception as exc:
@@ -638,7 +678,15 @@ def _run_suite(target: str) -> list[dict]:
             and marker not in draft.text
             and marker not in audit.text
         )
-        results.append(_result("AC-16", ok, "Reporter confidentiality held across list, draft, and audit reads." if ok else "Reporter confidentiality did not match AC-16."))
+        results.append(_result(
+            "AC-16", ok,
+            "Reporter confidentiality held across list, draft, and audit reads."
+            if ok else (
+                f"Privacy statuses detail/list/draft/audit="
+                f"{detail.status_code}/{listing.status_code}/{draft.status_code}/{audit.status_code}; "
+                f"private marker presence={tuple(marker in r.text for r in (detail, listing, draft, audit))}."
+            ),
+        ))
     except httpx.RequestError as exc:
         results.append(_error_result("AC-16", "communication", str(exc)))
     except Exception as exc:
@@ -688,14 +736,16 @@ def _run_suite(target: str) -> list[dict]:
 
         ordered = sorted(timings)
         p95 = ordered[max(0, int(len(ordered) * 0.95) - 1)]
-        ok = all(status < 400 for status in statuses) and p95 <= 1.0
+        unexpected = [(index, status) for index, status in enumerate(statuses) if status != 200]
+        ok = not unexpected and p95 <= 1.0
         results.append(
             _result(
                 "AC-18",
                 ok,
                 (
                     f"1,000-ticket performance test completed; p95={p95:.3f}s "
-                    f"across 200 sequential mixed requests."
+                    f"across 200 sequential mixed requests; "
+                    f"unexpected HTTP statuses (request index, status)={unexpected[:12]}."
                 ),
             )
         )

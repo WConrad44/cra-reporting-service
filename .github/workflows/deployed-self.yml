@@ -7,6 +7,10 @@ on:
     paths:
       - ".github/workflows/deployed-self.yml"
 
+concurrency:
+  group: pod-k-deployed-validation
+  cancel-in-progress: false
+
 jobs:
   deployed-self:
     runs-on: ubuntu-latest
@@ -67,6 +71,16 @@ jobs:
           for result in report.get("results", []):
               if result.get("outcome") != "pass":
                   print(result)
+          expected_ids = {f"AC-{number:02d}" for number in range(1, 19)}
+          observed_ids = [result.get("test_id") for result in report.get("results", [])]
+          required_coverage = {"code", "component", "system", "model"}
+          if (
+              len(observed_ids) != 18
+              or set(observed_ids) != expected_ids
+              or counts != {"pass": 18}
+              or not required_coverage.issubset(report.get("coverage", {}))
+          ):
+              raise SystemExit("Deployed self-validation FAILED; see the uploaded report.")
           PY
 
       - name: Upload deployed self report
