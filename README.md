@@ -60,11 +60,12 @@ HTTPS request
    -> Pydantic validation
    -> ticket + reporting rules
    -> SQLAlchemy
-   -> SQLite evaluation database
+   -> Render PostgreSQL (canonical deployment; SQLite for local/CI checks)
 ```
 
-See [docs/phase4-models.md](docs/phase4-models.md) for the delivered lifecycle, report-status,
-draft-data, persistence and request-flow models.
+See [Phase 5 as-delivered system models](docs/phase5-models.md) for the current PostgreSQL
+architecture and data-flow diagrams. The previous [Phase 4 models](docs/phase4-models.md)
+document the unchanged ticket lifecycle, report-status, and draft-data rules.
 
 ## API workflow
 
@@ -171,10 +172,13 @@ the class registry.
 
 ## Persistence and Phase 5 limitations
 
-The current Render evaluation service still uses SQLite. This is sufficient for the Phase 4
-workflow, but durable restart persistence (REQ-18) is not yet claimed because Render's local
-filesystem is not the final persistence design. PostgreSQL migration/restart validation and
-REQ-17 performance validation are Phase 5 work.
+The canonical Render evaluation service uses a managed PostgreSQL database via the
+internal `DATABASE_URL` setting; SQLite remains available for local development and CI.
+Phase 5 runs demonstrate 1,000-ticket AC-18 performance, 18/18 deployed self-acceptance,
+and reciprocal cross-team acceptance. The AC-19 prepare/verify script compares tickets,
+locked report content, and audit history across a web-service restart/redeploy; the operator
+must retain the intervening Render event as external evidence. In-memory fixed test-clock
+and tester sessions are not durable.
 
 The service does not submit reports directly to ENISA or a CSIRT, automatically determine
 whether exploitation is active, scan products for vulnerabilities, or deploy fixes.
