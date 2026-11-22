@@ -26,11 +26,23 @@ success by itself does not establish Render's durable storage behavior.
 | Team 17 independent suite against Team 21 | [Team 17 Phase 5 SYSTEM.md](https://github.com/team17-ece30861/pod-k-shared/blob/main/team17/SYSTEM.md) | 233/241; four error-precedence mismatches, one missing-awareness-reason mismatch, three missing resolved-draft reads |
 | AC-19 restart script | Team 21 operator's terminal output, November 22 | `prepare` created ticket `t_b7b2f068ab17`; `verify` printed `AC-19 PASSED`: ticket, recorded report and audit data compared equal. A Render restart-event screenshot is still needed to independently show a restart actually occurred between commands |
 
-The reported Team 17 241-case run overlapped with Team 21's earlier deployed
-self-validation, which also resets the database. Therefore the three 404s for
-resolved-draft reads are not conclusive until a non-overlapping rerun. We added
-a local regression that verifies all recorded report drafts and the advisory
-remain readable after closure, without changing the existing correct behavior.
+The Team 17 241-case run's three resolved-draft 404s are not yet explained.
+We have not established whether a concurrent database reset occurred. The
+current route appears to support reading resolved drafts, and a local regression
+now verifies that all recorded reports and the user advisory remain readable
+after closure. A fresh, coordinated, non-overlapping independent run is needed
+to verify the deployed behavior.
+
+## Post-merge regression verification
+
+[GitHub CI run 45063121354](https://github.com/WConrad44/cra-reporting-service/actions/runs/45063121354)
+passed on the merged commit `528887be9f2ff3629cea5f0aabf1f5c0fcaa0b64`
+(November 22, 2026). Both the SQLite and PostgreSQL jobs passed all
+48 regression tests. This does **not** certify the deployed AC-18 or
+reciprocal cross-team acceptance runs.
+
+The final shared Pod K [OpenAPI contract](https://github.com/team17-ece30861/pod-k-shared/blob/main/openapi.yaml)
+is version **0.3.0**, verified against the file's `info.version`.
 
 ## New work awaiting post-merge deployed verification
 
