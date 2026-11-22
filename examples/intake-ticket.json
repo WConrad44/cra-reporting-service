@@ -1,0 +1,14 @@
+{
+  "source": "external_researcher",
+  "title": "Example authentication bypass report",
+  "description": "Researcher reports a reproducible authentication bypass during evaluation.",
+  "product": {
+    "manufacturer": "Example Manufacturer",
+    "name": "Example Router",
+    "affected_versions": ["1.0"]
+  },
+  "reporter": {
+    "name": "Example Researcher",
+    "contact": "reporter@example.invalid"
+  }
+}
