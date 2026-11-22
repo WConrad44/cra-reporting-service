@@ -1,10 +1,12 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import API_TOKEN, MAX_BODY_BYTES
-from .database import Base, engine
+from .database import Base, SessionLocal, engine
+from .models import Ticket
 from .routes import cross_team, health, test_controls, tickets
 
 Base.metadata.create_all(bind=engine)
@@ -14,6 +16,11 @@ app = FastAPI(
     version="0.5.0",
     description="Phase 5 implementation of the Pod K CRA Article 14 reporting service.",
 )
+
+# The common contract permits content encoding. Large 1,000-ticket list responses
+# transfer substantially less JSON when clients advertise gzip support.
+# Fast compression limits additional CPU use on small Render instances.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=1)
 
 
 @app.middleware("http")
@@ -60,6 +67,42 @@ async def validation_exception_handler(
             status_code=400,
             content={"message": "Invalid test-interface request", "source": "system"},
         )
+
+    # FastAPI parses JSON before calling route dependencies. For unknown write
+    # targets, the Pod K contract requires 404 before body/actor validation,
+    # while authentication must still take precedence over 404.
+    segments = request.url.path.strip("/").split("/")
+    is_ticket_write = (
+        len(segments) >= 2
+        and segments[0] == "tickets"
+        and (
+            (request.method == "PATCH" and len(segments) == 2)
+            or (request.method == "POST" and len(segments) == 3 and segments[2] == "triage")
+        )
+    )
+    if is_ticket_write:
+        scheme, _, token = request.headers.get("authorization", "").partition(" ")
+        if scheme.lower() != "bearer" or token != API_TOKEN:
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "title": "Unauthorized",
+                    "status": 401,
+                    "detail": "Missing or invalid bearer token",
+                },
+                media_type="application/problem+json",
+            )
+        with SessionLocal() as db:
+            if db.get(Ticket, segments[1]) is None:
+                return JSONResponse(
+                    status_code=404,
+                    content={
+                        "title": "Not found",
+                        "status": 404,
+                        "detail": "Unknown ticket",
+                    },
+                    media_type="application/problem+json",
+                )
 
     errors = []
 

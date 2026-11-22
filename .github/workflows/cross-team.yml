@@ -1,11 +1,8 @@
 name: Cross-team validation
 
+# Destructive evaluation resets target data; run only when coordinated.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/cross-team.yml"
 
 concurrency:
   group: pod-k-deployed-validation

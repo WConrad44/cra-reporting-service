@@ -329,7 +329,7 @@ def update_ticket(
         old_aware = clock.normalize_utc(ticket.aware_at) if ticket.aware_at else None
         if aware_at != old_aware and not body.change_reason:
             raise HTTPException(
-                status_code=400,
+                status_code=422,
                 detail={"field": "change_reason", "message": "required when aware_at changes"},
             )
         ticket.aware_at = aware_at

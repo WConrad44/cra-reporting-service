@@ -1,11 +1,8 @@
 name: Deployed self-validation
 
+# Destructive evaluation resets target data; run only when coordinated.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/deployed-self.yml"
 
 concurrency:
   group: pod-k-deployed-validation
