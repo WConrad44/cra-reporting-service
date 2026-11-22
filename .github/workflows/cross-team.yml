@@ -7,6 +7,10 @@ on:
     paths:
       - ".github/workflows/cross-team.yml"
 
+concurrency:
+  group: pod-k-deployed-validation
+  cancel-in-progress: false
+
 jobs:
   cross-team:
     runs-on: ubuntu-latest
@@ -39,7 +43,6 @@ jobs:
           PY
 
       - name: Team 21 tester against Team 17 system (final rerun)
-        continue-on-error: true
         shell: bash
         run: |
           python - <<'PY'
@@ -70,15 +73,23 @@ jobs:
           for result in report.get("results", []):
               if result.get("outcome") != "pass":
                   print(result)
+          expected_ids = {f"AC-{number:02d}" for number in range(1, 19)}
+          observed = [result.get("test_id") for result in report.get("results", [])]
+          if len(observed) != 18 or set(observed) != expected_ids or counts != {"pass": 18}:
+              raise SystemExit("Team 21 -> Team 17 validation FAILED; see uploaded report.")
           PY
 
       - name: Team 17 tester against Team 21 system
-        continue-on-error: true
         shell: bash
+        env:
+          TEAM17_TESTER_TOKEN: ${{ secrets.TEAM17_TESTER_TOKEN }}
         run: |
           python - <<'PY'
-          import json, urllib.error, urllib.request
+          import json, os, urllib.error, urllib.request
 
+          tester_token = os.environ.get("TEAM17_TESTER_TOKEN", "")
+          if not tester_token:
+              raise SystemExit("Configure the TEAM17_TESTER_TOKEN GitHub Actions secret.")
           tester = "https://team17-prod-7zneiwx4ba-uc.a.run.app/tester"
           target = "https://team21-cra-reporting-service.onrender.com"
 
@@ -88,7 +99,10 @@ jobs:
                   tester + path,
                   data=data,
                   method="POST",
-                  headers={"Content-Type": "application/json"},
+                  headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {tester_token}",
+                },
               )
               try:
                   with urllib.request.urlopen(req, timeout=1200) as response:
@@ -108,6 +122,8 @@ jobs:
           for result in report.get("results", []):
               if result.get("outcome") != "pass":
                   print(result)
+          if not report.get("results") or counts != {"pass": len(report["results"])}:
+              raise SystemExit("Team 17 -> Team 21 validation FAILED; see uploaded report.")
           PY
 
       - name: Upload cross-team reports
