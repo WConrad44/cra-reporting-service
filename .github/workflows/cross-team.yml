@@ -80,6 +80,7 @@ jobs:
           PY
 
       - name: Team 17 tester against Team 21 system
+        if: always()
         shell: bash
         env:
           TEAM17_TESTER_TOKEN: ${{ secrets.TEAM17_TESTER_TOKEN }}
