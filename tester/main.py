@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from threading import Lock
@@ -608,7 +607,7 @@ def _run_suite(target: str) -> list[dict]:
     # AC-13: 500 malformed requests must never produce a 5xx or create data.
     try:
         _reset_and_clock(target, "2026-10-20T12:00:00Z")
-        def malformed(i: int) -> int:
+        def malformed(i: int) -> tuple[int, bool]:
             response = _request(
                 "POST",
                 target,
@@ -620,18 +619,31 @@ def _run_suite(target: str) -> list[dict]:
                 },
                 actor=True,
             )
-            return response.status_code
+            try:
+                body = response.json()
+            except ValueError:
+                body = {}
+            valid = (
+                response.status_code == 400
+                and "application/problem+json" in response.headers.get("content-type", "")
+                and isinstance(body, dict)
+                and body.get("status") == 400
+                and isinstance(body.get("errors"), list)
+            )
+            return response.status_code, valid
 
-        with ThreadPoolExecutor(max_workers=20) as pool:
-            malformed_statuses = list(pool.map(malformed, range(500)))
+        # AC-13 does not require concurrent requests. Serial calls avoid
+        # overloading the shared deployment and make failures reproducible.
+        checks = [malformed(i) for i in range(500)]
         listing = _request("GET", target, "/tickets")
-        unexpected = sorted({status for status in malformed_statuses if not 400 <= status < 500})
+        unexpected = [(i, status) for i, (status, valid) in enumerate(checks) if not valid]
         ok = not unexpected and listing.status_code == 200 and listing.json() == []
         results.append(_result(
             "AC-13", ok,
-            "500 malformed requests produced no 5xx and no stored tickets."
+            "500 sequential malformed requests returned valid problem+json 400 errors and created no tickets."
             if ok else (
-                f"Malformed requests returned unexpected statuses={unexpected}; "
+                f"Malformed requests had {len(unexpected)} invalid status/schema responses "
+                f"(first 12 request index/status pairs={unexpected[:12]}); "
                 f"list status={listing.status_code}."
             ),
         ))
