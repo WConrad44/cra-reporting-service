@@ -36,25 +36,36 @@ The **four draft types** are early warning, notification, final report and user 
 
 ## Model D — Persisted entities (ER)
 
+Every column shown below is defined in [`app/models.py`](../app/models.py). Compared with the abbreviated earlier diagram, the Phase 5 figure includes all of the ticket's product, incident, state, severity, fix, and triage fields; all optional `TicketExtension` investigation fields; and the complete report and audit records. `*_json` columns are serialized JSON stored as database text; they are not separate database tables.
+
 ```mermaid
 erDiagram
-    Ticket ||--o| TicketExtension : "optional details"
-    Ticket ||--o{ ReportRecord : "locked submissions"
-    Ticket ||--o{ AuditEntry : "changes"
+    Ticket ||--o| TicketExtension : "optional extension"
+    Ticket ||--o{ ReportRecord : "recorded submissions"
+    Ticket ||--o{ AuditEntry : "append-only history"
     Ticket {
         string id PK
+        string source
+        string title
+        text description
+        text product_json
+        text reporter_json
+        text member_states_json
+        text vulnerability_json
+        string severity
+        text fix_json
         string state
         string resolution
         datetime received_at
         datetime aware_at
-        text product_json
-        text reporter_json
+        text triage_reason
     }
     TicketExtension {
-        string ticket_id PK
+        string ticket_id PK,FK
         text exploit_json
         text mitigations_json
         text impact
+        text malicious_actor
         string sensitivity
     }
     ReportRecord {
@@ -73,25 +84,38 @@ erDiagram
         string actor
         string action
         text changes_json
+        text reason
     }
 ```
 
-Entities and relationships correspond to [app/models.py](../app/models.py). The canonical web service uses SQLAlchemy and Render-managed **PostgreSQL** for durable ticket, recorded report, and audit data. The fixed evaluation clock and in-process tester sessions are not represented as durable records.
+`TicketExtension.ticket_id` is both its primary key and a foreign key to `Ticket.id`. `ReportRecord` enforces uniqueness of `(ticket_id, report_type)`, and `AuditEntry` enforces uniqueness of `(ticket_id, seq)`. The canonical deployed instance persists these four entities in managed **Render PostgreSQL** through SQLAlchemy; SQLite is used for local testing and a CI backend. The fixed evaluation clock and in-memory tester session registry are not represented as durable database entities.
 
-## Model E — Phase 5 deployment and data flow
+## Model E — Phase 5 deployment and request / coverage flow
+
+The authentication and `X-Actor` checks were **not removed**. They are part of FastAPI's request-handling stage, alongside request/schema validation, rather than independent deployment components. `app/auth.py` supplies bearer and actor functions; the ticket routes use `Depends(require_token)`, `Depends(require_actor)`, or `validate_actor` as appropriate. Pydantic validation and the exception handlers in `app/main.py` enforce request formats and error responses.
 
 ```mermaid
 flowchart LR
-    A["Operator / Pod tester / optional JSON intake CLI"] --> B["Render HTTPS endpoint"]
-    B --> C["FastAPI routes and auth / X-Actor / validation"]
-    C --> D["Ticket, report, deadline, audit rules"]
-    D --> E["SQLAlchemy"]
-    E --> F[("Render PostgreSQL - Virginia")]
-    D <--> G["Test clock / code-coverage instrumentation"]
-    H["GitHub Actions CI / acceptance runner"] --> B
+    Clients["Operator / podmate / JSON intake CLI"] --> HTTPS["Render HTTPS ingress"]
+    HostedTester["Hosted Team 21 tester or GitHub runner"] --> HTTPS
+    subgraph App["Team 21 FastAPI system application"]
+        Entry["FastAPI routing, bearer and X-Actor checks, Pydantic validation, error handling"]
+        Rules["Ticket lifecycle, deadline, drafts, report submissions, audit rules"]
+        Clock["Real / fixed evaluation clock"]
+        Coverage["coverage.py source-line instrumentation (app/coverage_runtime.py)"]
+        Entry --> Rules
+        Rules <--> Clock
+    end
+    HTTPS --> Entry
+    Rules --> ORM["SQLAlchemy sessions and models"]
+    ORM --> DB[("Render PostgreSQL — Virginia")]
+    Entry -->|"POST /test/setup: start session coverage"| Coverage
+    Entry -.->|"executed route and validation lines"| Coverage
+    Rules -.->|"executed domain lines"| Coverage
+    Coverage -->|"GET /test/report: covered/total/basis"| Entry
 ```
 
-The API and separately hosted tester are two FastAPI applications. The JSON intake CLI sends requests through the existing `POST /tickets` route; it is not a separate persistence service. CI can run on GitHub while the canonical API remains hosted on Render.
+At the start of a cross-team system session, `POST /test/setup` invokes `start_session_coverage()`; later `GET /test/report` calls `code_coverage_measure()` and returns the measured source-line counts (`covered`, `total`, `basis`). Coverage excludes the course `cross_team.py` interface implementation so fetching a report does not itself inflate the count. The **separate** Team 21 tester calculates its own acceptance and component/system/model-coverage report, while the deployed application supplies the instrumented code measure. The JSON intake CLI uses the existing `POST /tickets` operation and does not introduce a separate server or persistence component.
 
 ## Phase 5 design requirements and model validation
 
