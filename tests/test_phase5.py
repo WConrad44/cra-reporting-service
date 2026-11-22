@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
-from tests.conftest import AUTH_ONLY
+from conftest import AUTH_ONLY
 
 
 def test_system_test_session_reports_code_coverage():
