@@ -181,8 +181,9 @@ def test_course_system_setup_and_report(client):
     assert report.status_code == 200, report.text
     body = report.json()
     assert body["session_id"] == "run-course-interface"
-    assert body["coverage"]["code"]["covered"] is None
-    assert body["coverage"]["code"]["total"] is None
+    assert isinstance(body["coverage"]["code"]["covered"], int)
+    assert isinstance(body["coverage"]["code"]["total"], int)
+    assert 0 < body["coverage"]["code"]["covered"] <= body["coverage"]["code"]["total"]
     assert body["coverage"]["code"]["basis"]
 
 

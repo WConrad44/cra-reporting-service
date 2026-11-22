@@ -370,3 +370,8 @@ class SystemCoverageReport(BaseModel):
 class SystemTestReportResponse(BaseModel):
     session_id: str
     coverage: SystemCoverageReport
+
+
+class TestInterfaceError(BaseModel):
+    message: str = Field(min_length=1)
+    source: Literal["tester", "system", "communication", "unknown"]

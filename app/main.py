@@ -11,8 +11,8 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="CRA Vulnerability Ticketing Service",
-    version="0.4.0",
-    description="Phase 4 implementation of the Pod K CRA Article 14 reporting service.",
+    version="0.5.0",
+    description="Phase 5 implementation of the Pod K CRA Article 14 reporting service.",
 )
 
 
@@ -55,6 +55,12 @@ async def validation_exception_handler(
     request: Request,
     exc: RequestValidationError,
 ):
+    if request.url.path in {"/test/setup", "/test/report"}:
+        return JSONResponse(
+            status_code=400,
+            content={"message": "Invalid test-interface request", "source": "system"},
+        )
+
     errors = []
 
     for error in exc.errors():
@@ -88,6 +94,17 @@ async def http_exception_handler(
     request: Request,
     exc: HTTPException,
 ):
+    if request.url.path in {"/test/setup", "/test/report"}:
+        detail = exc.detail
+        if isinstance(detail, dict):
+            message = str(detail.get("message") or detail.get("detail") or detail)
+        else:
+            message = str(detail)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"message": message or "Test-interface request failed", "source": "system"},
+        )
+
     titles = {
         400: "Invalid request",
         401: "Unauthorized",

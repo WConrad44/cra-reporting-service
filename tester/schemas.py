@@ -34,6 +34,7 @@ class Coverage(BaseModel):
     code: CoverageMeasure
     component: CoverageMeasure
     system: CoverageMeasure
+    model: CoverageMeasure | None = None
 
 
 class SuiteReport(BaseModel):

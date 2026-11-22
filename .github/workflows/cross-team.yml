@@ -12,15 +12,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Wait for Team 21 Phase 4 deployments
+      - name: Wait for Team 21 Phase 5 deployments
         shell: bash
         run: |
           python - <<'PY'
           import json, time, urllib.request
 
           targets = [
-              ("system", "https://team21-cra-reporting-service.onrender.com/openapi.json", "0.4.0"),
-              ("tester", "https://cra-phase3-tester.onrender.com/openapi.json", "0.4.2"),
+              ("system", "https://team21-cra-reporting-service.onrender.com/openapi.json", "0.5.0"),
+              ("tester", "https://cra-phase3-tester.onrender.com/openapi.json", "0.5.0"),
           ]
           for label, url, expected in targets:
               for attempt in range(30):
@@ -35,7 +35,7 @@ jobs:
                       print(f"{label} attempt {attempt + 1}: {exc}")
                   time.sleep(10)
               else:
-                  raise SystemExit(f"{label} did not reach Phase 4")
+                  raise SystemExit(f"{label} did not reach Phase 5")
           PY
 
       - name: Team 21 tester against Team 17 system (final rerun)
