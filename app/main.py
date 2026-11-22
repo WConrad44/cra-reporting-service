@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.middleware.gzip import GZipMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .config import API_TOKEN, MAX_BODY_BYTES
@@ -15,6 +16,11 @@ app = FastAPI(
     version="0.5.0",
     description="Phase 5 implementation of the Pod K CRA Article 14 reporting service.",
 )
+
+# The common contract permits content encoding. Large 1,000-ticket list responses
+# transfer substantially less JSON when clients advertise gzip support.
+# Fast compression limits additional CPU use on small Render instances.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=1)
 
 
 @app.middleware("http")
